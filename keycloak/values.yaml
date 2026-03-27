@@ -7,6 +7,10 @@
 # Edit values here → push to Git → ArgoCD auto-syncs.
 # =============================================================================
 keycloak:
+  # Override the fullname to avoid double-prefix (keycloak-keycloak-*)
+  # Without this, umbrella chart names resources as <release>-<subchart>-*
+  fullnameOverride: keycloak
+
   # Authentication: default admin credentials (change in production!)
   auth:
     adminUser: admin
