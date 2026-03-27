@@ -22,7 +22,7 @@ spark:
 # Webhook configuration (required for pod customization features)
 webhook:
   enable: true
-  port: 8080
+  port: 9443
   resources:
     requests:
       cpu: 50m
