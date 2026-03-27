@@ -16,12 +16,13 @@ data:
     Spark Structured Streaming - Rate Source Demo
 
     Flow:  Rate Source (10 rows/sec) → Windowed Aggregation (30s) → Console Output
+           + Total event counter tích lũy từ lúc job bắt đầu
 
     Rate source là built-in source của Spark, tự generate data (timestamp, value)
     mà không cần Kafka hay external system. Rất phù hợp cho testing/demo.
     """
     from pyspark.sql import SparkSession
-    from pyspark.sql.functions import window, col, count, avg
+    from pyspark.sql.functions import window, col, count, avg, sum as spark_sum, lit
 
     # Tạo SparkSession - entry point cho mọi Spark application
     spark = SparkSession.builder \
@@ -36,7 +37,7 @@ data:
         .option("rowsPerSecond", 10) \
         .load()
 
-    # === TRANSFORMATION ===
+    # === QUERY 1: Windowed Aggregation ===
     # Watermark: cho phép data đến trễ tối đa 1 phút trước khi bị bỏ qua
     # Window: nhóm events theo cửa sổ 30 giây, tính count và average
     windowed = df \
@@ -47,16 +48,30 @@ data:
             avg("value").alias("avg_value")
         )
 
-    # === SINK ===
-    # Ghi kết quả ra console (cho demo). Production sẽ dùng Kafka/S3/Delta Lake
-    # outputMode="update": chỉ ghi các rows đã thay đổi
-    # trigger: xử lý mỗi 30 giây một micro-batch
-    query = windowed.writeStream \
+    query_windowed = windowed.writeStream \
+        .queryName("windowed_aggregation") \
         .outputMode("update") \
         .format("console") \
         .option("truncate", "false") \
         .trigger(processingTime="30 seconds") \
         .start()
 
-    # Chờ vô hạn - streaming job chạy liên tục cho đến khi bị stop
-    query.awaitTermination()
+    # === QUERY 2: Total Event Counter ===
+    # Đếm tổng số event đã xử lý từ lúc job bắt đầu chạy
+    # outputMode="complete": mỗi micro-batch ghi lại toàn bộ kết quả (1 row duy nhất)
+    total_count = df \
+        .agg(
+            count("*").alias("total_events"),
+            avg("value").alias("overall_avg_value")
+        )
+
+    query_total = total_count.writeStream \
+        .queryName("total_event_counter") \
+        .outputMode("complete") \
+        .format("console") \
+        .option("truncate", "false") \
+        .trigger(processingTime="30 seconds") \
+        .start()
+
+    # Chờ cả 2 query - streaming job chạy liên tục cho đến khi bị stop
+    spark.streams.awaitAnyTermination()
