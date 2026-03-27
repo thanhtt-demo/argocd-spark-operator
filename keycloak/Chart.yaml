@@ -1,0 +1,16 @@
+# =============================================================================
+# Umbrella Chart: Keycloak
+# Wraps the Bitnami Keycloak Helm chart as a dependency.
+# ArgoCD points to this folder → Helm resolves the dependency automatically.
+# Values in values.yaml are passed to the keycloak subchart.
+# =============================================================================
+apiVersion: v2
+name: keycloak-umbrella
+description: Umbrella chart for Keycloak identity and access management
+type: application
+version: 0.1.0
+
+dependencies:
+  - name: keycloak
+    version: "*"
+    repository: https://charts.bitnami.com/bitnami

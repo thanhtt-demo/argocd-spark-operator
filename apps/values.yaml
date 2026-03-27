@@ -85,3 +85,19 @@ applications:
         duration: 5s
         factor: 2
         maxDuration: 3m
+
+  # ---------- Wave 2: Keycloak (Umbrella Helm Chart) ----------
+  # Keycloak identity and access management platform.
+  # Chart + values in keycloak/ folder.
+  - name: keycloak
+    path: keycloak
+    namespace: keycloak
+    syncWave: "2"
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

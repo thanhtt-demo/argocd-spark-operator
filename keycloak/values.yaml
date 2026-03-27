@@ -1,0 +1,48 @@
+# =============================================================================
+# Keycloak Helm Chart Values (Umbrella Chart)
+# Chart: keycloak (https://charts.bitnami.com/bitnami)
+#
+# Values are nested under "keycloak:" because this is an umbrella chart.
+# Helm passes values under the dependency name to the subchart.
+# Edit values here → push to Git → ArgoCD auto-syncs.
+# =============================================================================
+keycloak:
+  # Authentication: default admin credentials (change in production!)
+  auth:
+    adminUser: admin
+    adminPassword: admin
+
+  # Proxy configuration for running behind a reverse proxy / ingress
+  proxy: edge
+
+  # Production mode: set to true for production deployments
+  production: false
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    ports:
+      http: 80
+      https: 443
+
+  # Resource limits
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+  # PostgreSQL: embedded database for Keycloak data
+  postgresql:
+    enabled: true
+    auth:
+      postgresPassword: keycloak
+      username: keycloak
+      password: keycloak
+      database: keycloak
+    primary:
+      persistence:
+        enabled: true
+        size: 1Gi

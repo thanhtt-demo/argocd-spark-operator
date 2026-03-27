@@ -11,3 +11,17 @@ metadata:
   labels:
     app.kubernetes.io/part-of: spark-platform
     app.kubernetes.io/managed-by: argocd
+---
+# =============================================================================
+# Namespace: keycloak
+# Dedicated namespace for the Keycloak identity and access management platform.
+# Components: Keycloak server, PostgreSQL.
+# Managed by ArgoCD (sync wave 1 - created first).
+# =============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: keycloak
+  labels:
+    app.kubernetes.io/part-of: spark-platform
+    app.kubernetes.io/managed-by: argocd
