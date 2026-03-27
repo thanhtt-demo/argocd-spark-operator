@@ -14,7 +14,7 @@ spec:
   imagePullPolicy: IfNotPresent
   mainApplicationFile: local:///opt/spark/examples/src/main/python/wordcount.py
   arguments:
-    - "local:///opt/spark/licenses/LICENSE-helidon.txt"
+    - "file:///opt/spark/README.md"
   sparkVersion: "4.0.1"
   sparkConf:
     spark.eventLog.enabled: "false"
