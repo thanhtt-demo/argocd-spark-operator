@@ -165,7 +165,7 @@ Example: Replace `https://github.com/<YOUR-ORG>/argocd-spark-operator.git` with 
 git init
 git add .
 git commit -m "feat: initial spark operator + argocd setup"
-git remote add origin https://github.com/<YOUR-ORG>/argocd-spark-operator.git
+git remote add origin https://github.com/thanhtt-demo/argocd-spark-operator.git
 git push -u origin main
 ```
 

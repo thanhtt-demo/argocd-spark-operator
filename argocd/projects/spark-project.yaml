@@ -17,6 +17,8 @@ spec:
       namespace: spark-operator
     - server: https://kubernetes.default.svc
       namespace: spark-apps
+    - server: https://kubernetes.default.svc
+      namespace: ""  # For cluster-scoped resources (Namespace, CRDs)
   # Allowed cluster-scoped resources
   clusterResourceWhitelist:
     - group: ""
