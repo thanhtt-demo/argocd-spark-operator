@@ -1,0 +1,35 @@
+# =============================================================================
+# APP-OF-APPS (Bootstrap Application)
+# Apply this file ONCE to bootstrap the entire Spark platform.
+# This root Application points to the apps/ Helm chart, which auto-generates
+# all child Applications (namespaces, operator, RBAC, batch, streaming).
+#
+# Usage:
+#   kubectl apply -f app-of-apps.yaml
+#
+# Pattern: https://github.com/argoproj/argocd-example-apps
+# =============================================================================
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: spark-platform
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: spark-platform
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: "https://github.com/thanhtt-demo/argocd-spark-operator.git"  # <-- REPLACE
+    targetRevision: HEAD
+    path: apps                         # Points to the apps/ Helm chart
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false

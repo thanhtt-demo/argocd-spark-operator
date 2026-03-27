@@ -1,0 +1,64 @@
+# =============================================================================
+# Helm Template: ArgoCD Applications
+# Loops over .Values.applications and generates one Application CRD per entry.
+# Supports two source types:
+#   - Git source (path): for manifests stored in this repo
+#   - Helm source (helm): for external Helm charts (e.g., Spark Operator)
+# =============================================================================
+{{- $config := .Values.config -}}
+{{- range .Values.applications }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ .name }}
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    app.kubernetes.io/part-of: spark-platform
+  annotations:
+    argocd.argoproj.io/sync-wave: {{ .syncWave | default "0" | quote }}
+spec:
+  project: spark-platform
+  {{- if .helm }}
+  source:
+    repoURL: {{ .helm.repoURL }}
+    chart: {{ .helm.chart }}
+    targetRevision: {{ .helm.targetRevision | quote }}
+    helm:
+      releaseName: {{ .helm.releaseName }}
+      {{- if .helm.values }}
+      values: |
+{{ .helm.values | toYaml | indent 8 }}
+      {{- end }}
+  {{- else }}
+  source:
+    repoURL: {{ $config.source.repoURL | quote }}
+    targetRevision: {{ $config.source.targetRevision }}
+    path: {{ .path | default .name }}
+  {{- end }}
+  destination:
+    server: {{ $config.destination.server }}
+    {{- if .namespace }}
+    namespace: {{ .namespace }}
+    {{- end }}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    {{- if .syncOptions }}
+    syncOptions:
+    {{- range .syncOptions }}
+      - {{ . }}
+    {{- end }}
+    {{- end }}
+    {{- if .retry }}
+    retry:
+      limit: {{ .retry.limit }}
+      backoff:
+        duration: {{ .retry.backoff.duration }}
+        factor: {{ .retry.backoff.factor }}
+        maxDuration: {{ .retry.backoff.maxDuration }}
+    {{- end }}
+{{- end }}

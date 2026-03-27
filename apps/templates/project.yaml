@@ -1,0 +1,60 @@
+# =============================================================================
+# Helm Template: ArgoCD AppProject
+# Generates the AppProject that defines the security boundary for all apps.
+# Controls: which repos, namespaces, and resource types are allowed.
+# =============================================================================
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: spark-platform
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: Spark Platform - Operator and Applications
+
+  # === SOURCE REPOS ===
+  sourceRepos:
+    - {{ .Values.config.source.repoURL | quote }}
+    - "https://kubeflow.github.io/spark-operator"
+
+  # === DESTINATIONS ===
+  destinations:
+    - server: {{ .Values.config.destination.server }}
+      namespace: spark-operator
+    - server: {{ .Values.config.destination.server }}
+      namespace: spark-apps
+    - server: {{ .Values.config.destination.server }}
+      namespace: ""                   # Allow cluster-scoped resources (Namespace, CRDs)
+
+  # === CLUSTER-SCOPED RESOURCES ===
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+    - group: "apiextensions.k8s.io"
+      kind: CustomResourceDefinition
+    - group: "rbac.authorization.k8s.io"
+      kind: ClusterRole
+    - group: "rbac.authorization.k8s.io"
+      kind: ClusterRoleBinding
+    - group: "admissionregistration.k8s.io"
+      kind: MutatingWebhookConfiguration
+    - group: "admissionregistration.k8s.io"
+      kind: ValidatingWebhookConfiguration
+
+  # === NAMESPACE-SCOPED RESOURCES ===
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: "*"
+    - group: "apps"
+      kind: "*"
+    - group: "batch"
+      kind: "*"
+    - group: "rbac.authorization.k8s.io"
+      kind: "*"
+    - group: "sparkoperator.k8s.io"
+      kind: "*"
+
+  # Warn if there are orphaned resources not managed by any Application
+  orphanedResources:
+    warn: true

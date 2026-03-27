@@ -2,18 +2,20 @@
 
 Deploy and manage Apache Spark batch & streaming applications on Kubernetes using **ArgoCD** (GitOps) and **Kubeflow Spark Operator**.
 
+Follows the [argocd-example-apps](https://github.com/argoproj/argocd-example-apps) Helm-based App-of-Apps pattern.
+
 ## Architecture Overview
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                        ArgoCD (GitOps)                       │
 │                                                              │
-│  ┌─────────────┐   App-of-Apps Pattern                       │
-│  │ spark-       │──► spark-namespaces (sync-wave: 1)         │
-│  │ platform     │──► spark-operator   (sync-wave: 2, Helm)   │
-│  │ (root app)   │──► spark-rbac       (sync-wave: 3)         │
-│  │              │──► spark-batch-apps  (sync-wave: 4)         │
-│  │              │──► spark-streaming   (sync-wave: 4)         │
+│  ┌─────────────┐   Helm App-of-Apps (apps/ chart)            │
+│  │ spark-       │──► spark-namespaces    (sync-wave: 1)      │
+│  │ platform     │──► spark-operator      (sync-wave: 2, Helm)│
+│  │ (root app)   │──► spark-rbac          (sync-wave: 3)      │
+│  │              │──► spark-batch-apps    (sync-wave: 4)      │
+│  │              │──► spark-streaming-apps (sync-wave: 4)      │
 │  └─────────────┘                                             │
 └──────────────────────────────────────────────────────────────┘
                               │
@@ -33,42 +35,35 @@ Deploy and manage Apache Spark batch & streaming applications on Kubernetes usin
 
 ```
 argocd-spark-operator/
-├── README.md
-├── argocd/
-│   ├── app-of-apps.yaml                    # Root ArgoCD Application (App-of-Apps)
-│   ├── projects/
-│   │   └── spark-project.yaml              # ArgoCD AppProject for Spark
-│   └── applications/
-│       ├── spark-namespaces.yaml           # Wave 1: Create namespaces
-│       ├── spark-operator.yaml             # Wave 2: Install Spark Operator (Helm)
-│       ├── spark-rbac.yaml                 # Wave 3: RBAC for Spark apps
-│       ├── spark-batch.yaml                # Wave 4: Deploy batch jobs
-│       └── spark-streaming.yaml            # Wave 4: Deploy streaming jobs
-├── infrastructure/
-│   ├── namespaces/
-│   │   ├── spark-operator-ns.yaml          # spark-operator namespace
-│   │   └── spark-apps-ns.yaml             # spark-apps namespace
-│   ├── rbac/
-│   │   ├── spark-service-account.yaml     # ServiceAccount for Spark apps
-│   │   ├── spark-role.yaml                # Role with pod/service permissions
-│   │   └── spark-role-binding.yaml        # RoleBinding
-│   └── spark-operator/
-│       └── values.yaml                    # Helm values reference
-└── spark-apps/
-    ├── batch/
-    │   ├── spark-pi-batch.yaml            # SparkApplication: Scala SparkPi
-    │   ├── word-count-batch.yaml          # SparkApplication: Python WordCount
-    │   └── spark-pi-scheduled.yaml        # ScheduledSparkApplication: Cron SparkPi
-    └── streaming/
-        ├── configmap-streaming-code.yaml  # PySpark streaming code
-        └── rate-structured-streaming.yaml # SparkApplication: Structured Streaming
+├── app-of-apps.yaml                       # Bootstrap: apply once to deploy everything
+├── apps/                                  # Helm chart (App-of-Apps) - generates Application CRDs
+│   ├── Chart.yaml                         # Helm chart metadata
+│   ├── values.yaml                        # All applications defined here (single source of truth)
+│   └── templates/
+│       ├── project.yaml                   # Generates AppProject
+│       └── applications.yaml              # Loops over values to generate Applications
+├── namespaces/                            # Wave 1: Namespace manifests
+│   ├── spark-operator-ns.yaml
+│   └── spark-apps-ns.yaml
+├── rbac/                                  # Wave 3: RBAC manifests
+│   ├── spark-service-account.yaml
+│   ├── spark-role.yaml
+│   └── spark-role-binding.yaml
+├── spark-batch/                           # Wave 4: Batch SparkApplications
+│   ├── spark-pi-batch.yaml
+│   ├── word-count-batch.yaml
+│   └── spark-pi-scheduled.yaml
+├── spark-streaming/                       # Wave 4: Streaming SparkApplications
+│   ├── configmap-streaming-code.yaml
+│   └── rate-structured-streaming.yaml
+└── README.md
 ```
 
 ## Key Concepts
 
 | Concept | Description |
 |---------|-------------|
-| **App-of-Apps** | Root ArgoCD Application manages all child applications |
+| **Helm App-of-Apps** | Helm chart in `apps/` auto-generates all child Applications from `values.yaml` |
 | **Sync Waves** | Ordered deployment: namespaces → operator → RBAC → apps |
 | **Spark Operator** | Kubeflow controller that manages SparkApplication CRDs |
 | **SparkApplication** | CRD for one-time batch Spark jobs |
@@ -147,17 +142,11 @@ argocd login localhost:8080
 
 ## Step 2: Configure Your Git Repository
 
-> **IMPORTANT**: Replace `<YOUR-ORG>` in all YAML files with your actual GitHub org/username.
+> **IMPORTANT**: Replace the `repoURL` in `apps/values.yaml` and `app-of-apps.yaml` with your actual GitHub repo URL.
 
 Files that need updating:
-- `argocd/projects/spark-project.yaml`
-- `argocd/app-of-apps.yaml`
-- `argocd/applications/spark-namespaces.yaml`
-- `argocd/applications/spark-rbac.yaml`
-- `argocd/applications/spark-batch.yaml`
-- `argocd/applications/spark-streaming.yaml`
-
-Example: Replace `https://github.com/<YOUR-ORG>/argocd-spark-operator.git` with your repo URL.
+- `app-of-apps.yaml` → `spec.source.repoURL`
+- `apps/values.yaml` → `config.source.repoURL`
 
 ### Push to Git
 
@@ -171,18 +160,10 @@ git push -u origin main
 
 ---
 
-## Step 3: Deploy the ArgoCD Project
+## Step 3: Deploy Everything via App-of-Apps
 
 ```powershell
-kubectl apply -f argocd/projects/spark-project.yaml
-```
-
----
-
-## Step 4: Deploy Everything via App-of-Apps
-
-```powershell
-kubectl apply -f argocd/app-of-apps.yaml
+kubectl apply -f app-of-apps.yaml
 ```
 
 This single command triggers the entire deployment chain:
@@ -194,7 +175,7 @@ This single command triggers the entire deployment chain:
 
 ---
 
-## Step 5: Verify Deployment
+## Step 4: Verify Deployment
 
 ### Check ArgoCD applications
 
@@ -244,7 +225,7 @@ kubectl logs rate-structured-streaming-driver -n spark-apps
 
 ---
 
-## Step 6: Access Spark UI
+## Step 5: Access Spark UI
 
 ```powershell
 # Forward Spark UI for a running application
@@ -302,9 +283,9 @@ spec:
 
 ### Add your own Spark application
 
-1. Create a new `SparkApplication` YAML in `spark-apps/batch/` or `spark-apps/streaming/`
-2. Commit and push to Git
-3. ArgoCD will automatically detect and deploy it
+1. Create a new `SparkApplication` YAML in `spark-batch/` or `spark-streaming/`
+2. Add the app folder to `apps/values.yaml` if it's a new folder
+3. Commit and push to Git → ArgoCD auto-deploys
 
 ### Scale executors
 
@@ -364,12 +345,6 @@ argocd app sync spark-platform
 
 ```powershell
 argocd app delete spark-platform --cascade
-```
-
-### Delete ArgoCD project
-
-```powershell
-kubectl delete -f argocd/projects/spark-project.yaml
 ```
 
 ### Full cleanup

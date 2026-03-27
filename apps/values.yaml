@@ -1,0 +1,103 @@
+# =============================================================================
+# Spark Platform - Application Definitions
+# This file defines all ArgoCD Applications deployed by the App-of-Apps pattern.
+# The Helm template (templates/applications.yaml) loops over the "applications"
+# list and generates one Application CRD per entry.
+#
+# To add a new component:
+#   1. Create a folder at the repo root with the K8s manifests
+#   2. Add an entry to the "applications" list below
+#   3. Push to Git → ArgoCD auto-syncs the new Application
+# =============================================================================
+
+# === GLOBAL CONFIG ===
+# Shared settings used by all Git-sourced applications
+config:
+  destination:
+    server: https://kubernetes.default.svc       # Deploy to the local cluster
+  source:
+    repoURL: https://github.com/thanhtt-demo/argocd-spark-operator.git  # <-- REPLACE with your repo
+    targetRevision: HEAD                          # Track the latest commit on main
+
+# === APPLICATIONS ===
+# Each entry generates one ArgoCD Application CRD.
+# Sync waves control deployment ordering: wave 1 → 2 → 3 → 4
+applications:
+
+  # ---------- Wave 1: Namespaces ----------
+  # Creates spark-operator and spark-apps namespaces.
+  # Must run first because all subsequent apps require these namespaces.
+  - name: spark-namespaces
+    path: namespaces
+    syncWave: "1"
+
+  # ---------- Wave 2: Spark Operator (External Helm Chart) ----------
+  # Installs the Kubeflow Spark Operator via its Helm chart.
+  # Components: Controller, Webhook, CRDs, ClusterRole/Bindings
+  - name: spark-operator
+    syncWave: "2"
+    namespace: spark-operator
+    helm:
+      repoURL: https://kubeflow.github.io/spark-operator
+      chart: spark-operator
+      targetRevision: "*"
+      releaseName: spark-operator
+      # Helm values passed to the Spark Operator chart
+      values:
+        controller:
+          replicas: 1
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+        spark:
+          jobNamespaces:
+            - spark-apps
+        webhook:
+          enable: true
+          port: 9443           # Port 9443 to avoid conflict with default 8080
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+        metrics:
+          enable: true
+          port: 10254
+          endpoint: /metrics
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
+  # ---------- Wave 3: RBAC ----------
+  # ServiceAccount, Role, RoleBinding for Spark driver pods.
+  # Driver needs permissions to create executor pods, services, configmaps.
+  - name: spark-rbac
+    path: rbac
+    namespace: spark-apps
+    syncWave: "3"
+
+  # ---------- Wave 4: Batch Spark Applications ----------
+  # SparkPi, WordCount, ScheduledSparkPi
+  - name: spark-batch-apps
+    path: spark-batch
+    namespace: spark-apps
+    syncWave: "4"
+
+  # ---------- Wave 4: Streaming Spark Applications ----------
+  # Rate Structured Streaming (runs continuously)
+  - name: spark-streaming-apps
+    path: spark-streaming
+    namespace: spark-apps
+    syncWave: "4"
