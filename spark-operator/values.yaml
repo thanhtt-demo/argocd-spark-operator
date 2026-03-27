@@ -1,0 +1,41 @@
+# =============================================================================
+# Spark Operator Helm Chart Values
+# Chart: spark-operator (https://kubeflow.github.io/spark-operator)
+#
+# This file is referenced by ArgoCD via multi-source Application.
+# Edit values here → push to Git → ArgoCD auto-syncs.
+# =============================================================================
+
+# Controller: watches SparkApplication CRDs and creates spark-submit jobs
+controller:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# Spark job configuration
+spark:
+  jobNamespaces:
+    - spark-apps
+
+# Webhook: mutating/validating admission webhook for pod customization
+webhook:
+  enable: true
+  port: 9443           # Port 9443 to avoid conflict with default 8080
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+# Prometheus-compatible metrics endpoint
+metrics:
+  enable: true
+  port: 10254
+  endpoint: /metrics
