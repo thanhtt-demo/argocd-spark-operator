@@ -31,18 +31,13 @@ applications:
     path: namespaces
     syncWave: "1"
 
-  # # ---------- Wave 2: Spark Operator (External Helm Chart) ----------
-  # # Installs the Kubeflow Spark Operator via its Helm chart.
-  # # Values are in spark-operator/values.yaml (multi-source).
+  # # ---------- Wave 2: Spark Operator (Umbrella Helm Chart) ----------
+  # # Installs the Kubeflow Spark Operator.
+  # # Chart + values in spark-operator/ folder.
   # - name: spark-operator
-  #   syncWave: "2"
+  #   path: spark-operator
   #   namespace: spark-operator
-  #   helm:
-  #     repoURL: https://kubeflow.github.io/spark-operator
-  #     chart: spark-operator
-  #     targetRevision: "*"
-  #     releaseName: spark-operator
-  #     valuesPath: spark-operator/values.yaml
+  #   syncWave: "2"
   #   syncOptions:
   #     - CreateNamespace=true
   #     - ServerSideApply=true
@@ -75,18 +70,13 @@ applications:
   #   namespace: spark-apps
   #   syncWave: "4"
 
-  # ---------- Wave 2: Dagster (External Helm Chart) ----------
-  # Dagster orchestration platform: webserver, daemon, user-code deployments, PostgreSQL.
-  # Values are in dagster/values.yaml (multi-source).
+  # ---------- Wave 2: Dagster (Umbrella Helm Chart) ----------
+  # Dagster orchestration platform: webserver, daemon, user-code, PostgreSQL.
+  # Chart + values in dagster/ folder.
   - name: dagster
-    syncWave: "2"
+    path: dagster
     namespace: dagster
-    helm:
-      repoURL: https://dagster-io.github.io/helm
-      chart: dagster
-      targetRevision: "*"
-      releaseName: dagster
-      valuesPath: dagster/values.yaml
+    syncWave: "2"
     syncOptions:
       - CreateNamespace=true
     retry:

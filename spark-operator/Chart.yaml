@@ -1,0 +1,16 @@
+# =============================================================================
+# Umbrella Chart: Spark Operator
+# Wraps the Kubeflow Spark Operator Helm chart as a dependency.
+# ArgoCD points to this folder → Helm resolves the dependency automatically.
+# Values in values.yaml are passed to the spark-operator subchart.
+# =============================================================================
+apiVersion: v2
+name: spark-operator-umbrella
+description: Umbrella chart for Kubeflow Spark Operator
+type: application
+version: 0.1.0
+
+dependencies:
+  - name: spark-operator
+    version: "*"
+    repository: https://kubeflow.github.io/spark-operator

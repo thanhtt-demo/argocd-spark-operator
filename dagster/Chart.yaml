@@ -1,0 +1,16 @@
+# =============================================================================
+# Umbrella Chart: Dagster
+# Wraps the official Dagster Helm chart as a dependency.
+# ArgoCD points to this folder → Helm resolves the dependency automatically.
+# Values in values.yaml are passed to the dagster subchart.
+# =============================================================================
+apiVersion: v2
+name: dagster-umbrella
+description: Umbrella chart for Dagster orchestration platform
+type: application
+version: 0.1.0
+
+dependencies:
+  - name: dagster
+    version: "*"
+    repository: https://dagster-io.github.io/helm

@@ -1,10 +1,8 @@
 # =============================================================================
 # Helm Template: ArgoCD Applications
 # Loops over .Values.applications and generates one Application CRD per entry.
-# Supports three source types:
-#   - Git source (path): for manifests stored in this repo
-#   - Helm source (helm.values): inline Helm values
-#   - Helm multi-source (helm.valuesPath): values from a file in this repo
+# All apps use Git source with path — including umbrella Helm charts
+# (dagster/, spark-operator/) which have their own Chart.yaml + values.yaml.
 # =============================================================================
 {{- $config := .Values.config -}}
 {{- range .Values.applications }}
@@ -22,36 +20,10 @@ metadata:
     argocd.argoproj.io/sync-wave: {{ .syncWave | default "0" | quote }}
 spec:
   project: spark-platform
-  {{- if and .helm .helm.valuesPath }}
-  # Multi-source: Helm chart + values file from Git repo
-  sources:
-    - repoURL: {{ .helm.repoURL }}
-      chart: {{ .helm.chart }}
-      targetRevision: {{ .helm.targetRevision | quote }}
-      helm:
-        releaseName: {{ .helm.releaseName }}
-        valueFiles:
-          - $values/{{ .helm.valuesPath }}
-    - repoURL: {{ $config.source.repoURL | quote }}
-      targetRevision: {{ $config.source.targetRevision }}
-      ref: values
-  {{- else if .helm }}
-  source:
-    repoURL: {{ .helm.repoURL }}
-    chart: {{ .helm.chart }}
-    targetRevision: {{ .helm.targetRevision | quote }}
-    helm:
-      releaseName: {{ .helm.releaseName }}
-      {{- if .helm.values }}
-      values: |
-{{ .helm.values | toYaml | indent 8 }}
-      {{- end }}
-  {{- else }}
   source:
     repoURL: {{ $config.source.repoURL | quote }}
     targetRevision: {{ $config.source.targetRevision }}
     path: {{ .path | default .name }}
-  {{- end }}
   destination:
     server: {{ $config.destination.server }}
     {{- if .namespace }}

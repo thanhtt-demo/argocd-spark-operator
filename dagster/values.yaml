@@ -1,46 +1,47 @@
 # =============================================================================
-# Dagster Helm Chart Values
+# Dagster Helm Chart Values (Umbrella Chart)
 # Chart: dagster (https://dagster-io.github.io/helm)
 #
-# This file is referenced by ArgoCD via multi-source Application.
+# Values are nested under "dagster:" because this is an umbrella chart.
+# Helm passes values under the dependency name to the subchart.
 # Edit values here → push to Git → ArgoCD auto-syncs.
 # =============================================================================
+dagster:
+  # PostgreSQL: embedded database for Dagster metadata
+  postgresql:
+    enabled: true
+    postgresqlUsername: dagster
+    postgresqlPassword: dagster
+    postgresqlDatabase: dagster
+    service:
+      port: 5432
 
-# PostgreSQL: embedded database for Dagster metadata
-postgresql:
-  enabled: true
-  postgresqlUsername: dagster
-  postgresqlPassword: dagster
-  postgresqlDatabase: dagster
-  service:
-    port: 5432
+  # Dagster webserver (UI)
+  dagsterWebserver:
+    replicaCount: 1
+    service:
+      type: ClusterIP
+      port: 80
 
-# Dagster webserver (UI)
-dagsterWebserver:
-  replicaCount: 1
-  service:
-    type: ClusterIP
-    port: 80
+  # User code deployments: your Dagster definitions
+  dagster-user-deployments:
+    enabled: true
+    deployments:
+      - name: "user-code"
+        image:
+          repository: "vnthanhtt/spark-dagster-project"
+          tag: "1"
+          pullPolicy: Always
+        dagsterApiGrpcArgs:
+          - "--python-file"
+          - "/app/iris_analysis/definitions.py"
+        port: 3030
 
-# User code deployments: your Dagster definitions
-dagster-user-deployments:
-  enabled: true
-  deployments:
-    - name: "user-code"
-      image:
-        repository: "vnthanhtt/spark-dagster-project"
-        tag: "1"
-        pullPolicy: Always
-      dagsterApiGrpcArgs:
-        - "--python-file"
-        - "/app/iris_analysis/definitions.py"
-      port: 3030
-
-# Resource limits for Dagster components
-resources:
-  limits:
-    cpu: 500m
-    memory: 512Mi
-  requests:
-    cpu: 100m
-    memory: 256Mi
+  # Resource limits for Dagster components
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
