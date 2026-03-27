@@ -41,6 +41,8 @@ keycloak:
   # PostgreSQL: embedded database for Keycloak data
   postgresql:
     enabled: true
+    image:
+      tag: 16.6.0-debian-12-r6
     auth:
       postgresPassword: keycloak
       username: keycloak
