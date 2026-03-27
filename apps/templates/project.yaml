@@ -18,7 +18,7 @@ spec:
     - {{ .Values.config.source.repoURL | quote }}
     - "https://kubeflow.github.io/spark-operator"
     - "https://dagster-io.github.io/helm"
-    - "https://charts.bitnami.com/bitnami"
+    - "registry-1.docker.io/cloudpirates/*"
 
   # === DESTINATIONS ===
   destinations:

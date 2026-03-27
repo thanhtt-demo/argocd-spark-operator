@@ -1,6 +1,6 @@
 # =============================================================================
 # Keycloak Helm Chart Values (Umbrella Chart)
-# Chart: keycloak (https://charts.bitnami.com/bitnami)
+# Chart: keycloak (oci://registry-1.docker.io/cloudpirates/keycloak)
 #
 # Values are nested under "keycloak:" because this is an umbrella chart.
 # Helm passes values under the dependency name to the subchart.
@@ -8,30 +8,19 @@
 # =============================================================================
 keycloak:
   # Override the fullname to avoid double-prefix (keycloak-keycloak-*)
-  # Without this, umbrella chart names resources as <release>-<subchart>-*
   fullnameOverride: keycloak
 
-  # Pin image to an available version
-  image:
-    tag: 25.0.6-debian-12-r2
-
-  # Authentication: default admin credentials (change in production!)
-  auth:
+  # Admin credentials (change in production!)
+  keycloak:
     adminUser: admin
     adminPassword: admin
-
-  # Proxy configuration for running behind a reverse proxy / ingress
-  proxy: edge
-
-  # Production mode: set to true for production deployments
-  production: false
+    production: false    # start-dev mode for local development
+    httpEnabled: true
 
   # Service configuration
   service:
     type: ClusterIP
-    ports:
-      http: 80
-      https: 443
+    httpPort: 8080
 
   # Resource limits
   resources:
@@ -42,17 +31,9 @@ keycloak:
       cpu: 1000m
       memory: 1Gi
 
-  # PostgreSQL: embedded database for Keycloak data
-  postgresql:
+  # Embedded PostgreSQL database for Keycloak data
+  postgres:
     enabled: true
-    image:
-      tag: 16.6.0-debian-12-r6
     auth:
-      postgresPassword: keycloak
-      username: keycloak
-      password: keycloak
       database: keycloak
-    primary:
-      persistence:
-        enabled: true
-        size: 1Gi
+      password: keycloak
