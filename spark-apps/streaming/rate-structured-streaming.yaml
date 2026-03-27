@@ -1,3 +1,7 @@
+# Spark Structured Streaming Application
+# This runs a long-lived streaming job that generates synthetic data
+# using the built-in "rate" source and performs windowed aggregations.
+# Unlike batch jobs, streaming jobs run continuously (restartPolicy: Always).
 apiVersion: sparkoperator.k8s.io/v1beta2
 kind: SparkApplication
 metadata:
@@ -7,51 +11,66 @@ metadata:
     app.kubernetes.io/part-of: spark-platform
     app.kubernetes.io/component: streaming
 spec:
-  type: Python
-  pythonVersion: "3"
-  mode: cluster
-  image: docker.io/library/spark:4.0.1
+  type: Python                    # Language: Python (PySpark)
+  pythonVersion: "3"              # Python 3.x
+  mode: cluster                   # Driver runs inside K8s (not client mode)
+  image: docker.io/library/spark:4.0.1   # Official Spark 4.0.1 Docker image
   imagePullPolicy: IfNotPresent
+  # Path to the PySpark script - mounted from ConfigMap (see volumes below)
+  # local:// tells Spark Operator the file is already inside the pod filesystem
   mainApplicationFile: local:///opt/spark-apps/rate_streaming.py
   sparkVersion: "4.0.1"
+  # Spark configuration properties (passed as --conf to spark-submit)
   sparkConf:
     spark.eventLog.enabled: "false"
     spark.ui.enabled: "true"
+    # Checkpoint location for streaming state recovery after restarts
     spark.sql.streaming.checkpointLocation: /tmp/spark-checkpoints
+  # Restart policy: Always = if the job fails or stops, Spark Operator restarts it
+  # This is critical for streaming jobs that must run 24/7
   restartPolicy:
-    type: Always
-    onFailureRetries: 5
-    onFailureRetryInterval: 30
-    onSubmissionFailureRetries: 5
-    onSubmissionFailureRetryInterval: 30
+    type: Always                          # Always restart (streaming = long-running)
+    onFailureRetries: 5                   # Retry up to 5 times on failure
+    onFailureRetryInterval: 30            # Wait 30s between failure retries
+    onSubmissionFailureRetries: 5         # Retry up to 5 times if spark-submit fails
+    onSubmissionFailureRetryInterval: 30  # Wait 30s between submission retries
+
+  # === DRIVER POD ===
+  # The driver coordinates the streaming job, manages query planning & scheduling
   driver:
     cores: 1
-    coreLimit: "1200m"
-    memory: "1g"
+    coreLimit: "1200m"            # Hard CPU limit (1.2 cores)
+    memory: "1g"                  # 1GB memory for driver
     labels:
       app: rate-structured-streaming
       version: "4.0.1"
-    serviceAccount: spark-operator-spark
+    serviceAccount: spark-operator-spark  # SA with permissions to create executor pods
+    # Mount the ConfigMap containing our PySpark streaming code
     volumeMounts:
       - name: streaming-app-code
-        mountPath: /opt/spark-apps
+        mountPath: /opt/spark-apps    # PySpark script available at /opt/spark-apps/
+    # Security: run as non-root with minimal privileges
     securityContext:
       capabilities:
         drop:
-          - ALL
-      runAsUser: 185
-      runAsGroup: 185
-      runAsNonRoot: true
+          - ALL                   # Drop all Linux capabilities
+      runAsUser: 185              # Spark user UID (non-root)
+      runAsGroup: 185             # Spark group GID
+      runAsNonRoot: true          # Enforce non-root
       allowPrivilegeEscalation: false
       seccompProfile:
-        type: RuntimeDefault
+        type: RuntimeDefault      # Use container runtime's default seccomp profile
+
+  # === EXECUTOR PODS ===
+  # Executors do the actual data processing (reading rate source, computing aggregations)
   executor:
     cores: 1
-    instances: 2
-    memory: "1g"
+    instances: 2                  # 2 executor pods for parallel processing
+    memory: "1g"                  # 1GB memory per executor
     labels:
       app: rate-structured-streaming
       version: "4.0.1"
+    # Executors also need the code mounted (for Python worker processes)
     volumeMounts:
       - name: streaming-app-code
         mountPath: /opt/spark-apps
@@ -65,6 +84,10 @@ spec:
       allowPrivilegeEscalation: false
       seccompProfile:
         type: RuntimeDefault
+
+  # === VOLUMES ===
+  # ConfigMap "spark-streaming-app-code" contains the PySpark script (rate_streaming.py)
+  # Defined in configmap-streaming-code.yaml
   volumes:
     - name: streaming-app-code
       configMap:

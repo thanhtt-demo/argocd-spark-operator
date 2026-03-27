@@ -1,3 +1,6 @@
+# ConfigMap chứa source code PySpark cho streaming job
+# ConfigMap được mount vào pod tại /opt/spark-apps/ (xem rate-structured-streaming.yaml)
+# Cách này cho phép thay đổi code mà không cần build lại Docker image
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -7,26 +10,35 @@ metadata:
     app.kubernetes.io/part-of: spark-platform
     app.kubernetes.io/component: streaming
 data:
+  # Key = filename khi mount vào pod → /opt/spark-apps/rate_streaming.py
   rate_streaming.py: |
     """
     Spark Structured Streaming - Rate Source Demo
-    Generates synthetic data using the built-in rate source
-    and writes aggregated results to the console.
+
+    Flow:  Rate Source (10 rows/sec) → Windowed Aggregation (30s) → Console Output
+
+    Rate source là built-in source của Spark, tự generate data (timestamp, value)
+    mà không cần Kafka hay external system. Rất phù hợp cho testing/demo.
     """
     from pyspark.sql import SparkSession
     from pyspark.sql.functions import window, col, count, avg
 
+    # Tạo SparkSession - entry point cho mọi Spark application
     spark = SparkSession.builder \
         .appName("RateStreamingDemo") \
         .getOrCreate()
 
-    # Rate source: generates rows with (timestamp, value) at a specified rate
+    # === SOURCE ===
+    # Rate source: tự động generate rows (timestamp, value) với tốc độ 10 rows/giây
+    # Không cần Kafka, Kinesis hay bất kỳ external system nào
     df = spark.readStream \
         .format("rate") \
         .option("rowsPerSecond", 10) \
         .load()
 
-    # Windowed aggregation: count events and average value per 30-second window
+    # === TRANSFORMATION ===
+    # Watermark: cho phép data đến trễ tối đa 1 phút trước khi bị bỏ qua
+    # Window: nhóm events theo cửa sổ 30 giây, tính count và average
     windowed = df \
         .withWatermark("timestamp", "1 minute") \
         .groupBy(window(col("timestamp"), "30 seconds")) \
@@ -35,7 +47,10 @@ data:
             avg("value").alias("avg_value")
         )
 
-    # Write to console for demo purposes
+    # === SINK ===
+    # Ghi kết quả ra console (cho demo). Production sẽ dùng Kafka/S3/Delta Lake
+    # outputMode="update": chỉ ghi các rows đã thay đổi
+    # trigger: xử lý mỗi 30 giây một micro-batch
     query = windowed.writeStream \
         .outputMode("update") \
         .format("console") \
@@ -43,4 +58,5 @@ data:
         .trigger(processingTime="30 seconds") \
         .start()
 
+    # Chờ vô hạn - streaming job chạy liên tục cho đến khi bị stop
     query.awaitTermination()
