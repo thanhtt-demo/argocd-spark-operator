@@ -60,6 +60,10 @@ spec:
       kind: "*"
     - group: "sparkoperator.k8s.io"
       kind: "*"
+    - group: "networking.k8s.io"
+      kind: "*"
+    - group: "policy"
+      kind: "*"
 
   # Warn if there are orphaned resources not managed by any Application
   orphanedResources:
