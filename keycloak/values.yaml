@@ -11,6 +11,10 @@ keycloak:
   # Without this, umbrella chart names resources as <release>-<subchart>-*
   fullnameOverride: keycloak
 
+  # Pin image to an available version
+  image:
+    tag: 25.0.6-debian-12-r2
+
   # Authentication: default admin credentials (change in production!)
   auth:
     adminUser: admin
