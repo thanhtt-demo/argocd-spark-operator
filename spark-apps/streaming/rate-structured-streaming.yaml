@@ -1,0 +1,71 @@
+apiVersion: sparkoperator.k8s.io/v1beta2
+kind: SparkApplication
+metadata:
+  name: rate-structured-streaming
+  namespace: spark-apps
+  labels:
+    app.kubernetes.io/part-of: spark-platform
+    app.kubernetes.io/component: streaming
+spec:
+  type: Python
+  pythonVersion: "3"
+  mode: cluster
+  image: docker.io/library/spark:4.0.1
+  imagePullPolicy: IfNotPresent
+  mainApplicationFile: local:///opt/spark-apps/rate_streaming.py
+  sparkVersion: "4.0.1"
+  sparkConf:
+    spark.eventLog.enabled: "false"
+    spark.ui.enabled: "true"
+    spark.sql.streaming.checkpointLocation: /tmp/spark-checkpoints
+  restartPolicy:
+    type: Always
+    onFailureRetries: 5
+    onFailureRetryInterval: 30
+    onSubmissionFailureRetries: 5
+    onSubmissionFailureRetryInterval: 30
+  driver:
+    cores: 1
+    coreLimit: "1200m"
+    memory: "1g"
+    labels:
+      app: rate-structured-streaming
+      version: "4.0.1"
+    serviceAccount: spark-operator-spark
+    volumeMounts:
+      - name: streaming-app-code
+        mountPath: /opt/spark-apps
+    securityContext:
+      capabilities:
+        drop:
+          - ALL
+      runAsUser: 185
+      runAsGroup: 185
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      seccompProfile:
+        type: RuntimeDefault
+  executor:
+    cores: 1
+    instances: 2
+    memory: "1g"
+    labels:
+      app: rate-structured-streaming
+      version: "4.0.1"
+    volumeMounts:
+      - name: streaming-app-code
+        mountPath: /opt/spark-apps
+    securityContext:
+      capabilities:
+        drop:
+          - ALL
+      runAsUser: 185
+      runAsGroup: 185
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      seccompProfile:
+        type: RuntimeDefault
+  volumes:
+    - name: streaming-app-code
+      configMap:
+        name: spark-streaming-app-code

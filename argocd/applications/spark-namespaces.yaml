@@ -1,0 +1,23 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: spark-namespaces
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: spark-platform
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: spark-platform
+  source:
+    repoURL: "https://github.com/thanhtt-demo/argocd-spark-operator.git"  # <-- REPLACE
+    targetRevision: HEAD
+    path: infrastructure/namespaces
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false

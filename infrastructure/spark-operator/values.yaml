@@ -1,0 +1,38 @@
+# Spark Operator Helm Chart Values - Production Configuration
+# Chart: spark-operator/spark-operator
+# Repo: https://kubeflow.github.io/spark-operator
+
+# Controller configuration
+controller:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# Spark job configuration
+spark:
+  # Namespaces where SparkApplications can be deployed
+  jobNamespaces:
+    - spark-apps
+
+# Webhook configuration (required for pod customization features)
+webhook:
+  enable: true
+  port: 8080
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+# Prometheus metrics
+metrics:
+  enable: true
+  port: 10254
+  endpoint: /metrics

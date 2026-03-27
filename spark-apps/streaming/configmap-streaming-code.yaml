@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spark-streaming-app-code
+  namespace: spark-apps
+  labels:
+    app.kubernetes.io/part-of: spark-platform
+    app.kubernetes.io/component: streaming
+data:
+  rate_streaming.py: |
+    """
+    Spark Structured Streaming - Rate Source Demo
+    Generates synthetic data using the built-in rate source
+    and writes aggregated results to the console.
+    """
+    from pyspark.sql import SparkSession
+    from pyspark.sql.functions import window, col, count, avg
+
+    spark = SparkSession.builder \
+        .appName("RateStreamingDemo") \
+        .getOrCreate()
+
+    # Rate source: generates rows with (timestamp, value) at a specified rate
+    df = spark.readStream \
+        .format("rate") \
+        .option("rowsPerSecond", 10) \
+        .load()
+
+    # Windowed aggregation: count events and average value per 30-second window
+    windowed = df \
+        .withWatermark("timestamp", "1 minute") \
+        .groupBy(window(col("timestamp"), "30 seconds")) \
+        .agg(
+            count("*").alias("event_count"),
+            avg("value").alias("avg_value")
+        )
+
+    # Write to console for demo purposes
+    query = windowed.writeStream \
+        .outputMode("update") \
+        .format("console") \
+        .option("truncate", "false") \
+        .trigger(processingTime="30 seconds") \
+        .start()
+
+    query.awaitTermination()

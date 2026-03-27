@@ -1,0 +1,48 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: spark-platform
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: Spark Platform - Operator and Applications
+  # Source repositories
+  sourceRepos:
+    - "https://kubeflow.github.io/spark-operator"
+    - "https://github.com/thanhtt-demo/argocd-spark-operator.git"  # <-- REPLACE with your Git repo URL
+  # Destination clusters and namespaces
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: spark-operator
+    - server: https://kubernetes.default.svc
+      namespace: spark-apps
+  # Allowed cluster-scoped resources
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+    - group: "apiextensions.k8s.io"
+      kind: CustomResourceDefinition
+    - group: "rbac.authorization.k8s.io"
+      kind: ClusterRole
+    - group: "rbac.authorization.k8s.io"
+      kind: ClusterRoleBinding
+    - group: "admissionregistration.k8s.io"
+      kind: MutatingWebhookConfiguration
+    - group: "admissionregistration.k8s.io"
+      kind: ValidatingWebhookConfiguration
+  # Allowed namespace-scoped resources
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: "*"
+    - group: "apps"
+      kind: "*"
+    - group: "batch"
+      kind: "*"
+    - group: "rbac.authorization.k8s.io"
+      kind: "*"
+    - group: "sparkoperator.k8s.io"
+      kind: "*"
+  # Orphaned resources monitoring
+  orphanedResources:
+    warn: true
