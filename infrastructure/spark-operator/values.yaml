@@ -1,28 +1,35 @@
-# Spark Operator Helm Chart Values - Production Configuration
+# =============================================================================
+# Spark Operator Helm Chart Values - Reference Configuration
 # Chart: spark-operator/spark-operator
 # Repo: https://kubeflow.github.io/spark-operator
+#
+# NOTE: This file is a reference only. The actual values used during deployment
+# are defined inline in argocd/applications/spark-operator.yaml (helm.values).
+# Keep this file in sync manually if you make changes.
+# =============================================================================
 
-# Controller configuration
+# Controller: watches SparkApplication CRDs and creates spark-submit jobs
 controller:
-  replicas: 1
+  replicas: 1                         # 1 replica sufficient for dev/staging
   resources:
     requests:
-      cpu: 100m
-      memory: 256Mi
+      cpu: 100m                       # Minimum 0.1 CPU
+      memory: 256Mi                   # Minimum 256MB RAM
     limits:
-      cpu: 500m
-      memory: 512Mi
+      cpu: 500m                       # Maximum 0.5 CPU
+      memory: 512Mi                   # Maximum 512MB RAM
 
 # Spark job configuration
 spark:
-  # Namespaces where SparkApplications can be deployed
+  # Namespaces where the operator watches for SparkApplications
   jobNamespaces:
-    - spark-apps
+    - spark-apps                      # Operator only watches this namespace
 
-# Webhook configuration (required for pod customization features)
+# Webhook: mutating/validating admission webhook for pod customization
+# Required for features like volume mounts, env vars injection, tolerations
 webhook:
-  enable: true
-  port: 9443
+  enable: true                        # Enable webhook (required for volume mounts)
+  port: 9443                          # Custom port to avoid conflict with default 8080
   resources:
     requests:
       cpu: 50m
@@ -31,8 +38,8 @@ webhook:
       cpu: 200m
       memory: 256Mi
 
-# Prometheus metrics
+# Prometheus-compatible metrics endpoint
 metrics:
-  enable: true
-  port: 10254
-  endpoint: /metrics
+  enable: true                        # Enable metrics for monitoring
+  port: 10254                         # Port for Prometheus to scrape
+  endpoint: /metrics                  # HTTP path for metrics

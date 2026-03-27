@@ -1,3 +1,14 @@
+# =============================================================================
+# ScheduledSparkApplication: Spark Pi (Cron-based)
+# Runs the SparkPi job on a recurring schedule (every 6 hours).
+# Uses ScheduledSparkApplication CRD instead of SparkApplication.
+#
+# Key differences from SparkApplication:
+#   - Has a cron schedule (like K8s CronJob)
+#   - concurrencyPolicy: controls what happens if the previous run is still active
+#   - Keeps history of successful/failed runs
+#   - The SparkApplication spec goes inside "template" (not directly under "spec")
+# =============================================================================
 apiVersion: sparkoperator.k8s.io/v1beta2
 kind: ScheduledSparkApplication
 metadata:
@@ -7,10 +18,12 @@ metadata:
     app.kubernetes.io/part-of: spark-platform
     app.kubernetes.io/component: batch-scheduled
 spec:
-  schedule: "0 */6 * * *"  # Every 6 hours
-  concurrencyPolicy: Forbid
-  successfulRunHistoryLimit: 3
-  failedRunHistoryLimit: 3
+  schedule: "0 */6 * * *"            # Cron expression: run every 6 hours (at minute 0)
+  concurrencyPolicy: Forbid           # Don't start a new run if the previous one is still active
+  successfulRunHistoryLimit: 3        # Keep the last 3 successful run records
+  failedRunHistoryLimit: 3            # Keep the last 3 failed run records
+
+  # The SparkApplication template (same structure as a regular SparkApplication spec)
   template:
     type: Scala
     mode: cluster
@@ -19,14 +32,17 @@ spec:
     mainClass: org.apache.spark.examples.SparkPi
     mainApplicationFile: local:///opt/spark/examples/jars/spark-examples.jar
     arguments:
-      - "5000"
+      - "5000"                        # Fewer partitions than the regular batch (faster execution)
     sparkVersion: "4.0.1"
+
     restartPolicy:
       type: OnFailure
-      onFailureRetries: 2
+      onFailureRetries: 2             # Fewer retries for scheduled jobs
       onFailureRetryInterval: 10
       onSubmissionFailureRetries: 3
       onSubmissionFailureRetryInterval: 20
+
+    # === DRIVER POD ===
     driver:
       cores: 1
       coreLimit: "1200m"
@@ -45,9 +61,11 @@ spec:
         allowPrivilegeEscalation: false
         seccompProfile:
           type: RuntimeDefault
+
+    # === EXECUTOR PODS ===
     executor:
       cores: 1
-      instances: 1
+      instances: 1                    # Only 1 executor (lighter resource usage for scheduled runs)
       memory: "512m"
       labels:
         app: spark-pi-scheduled

@@ -1,26 +1,38 @@
+# =============================================================================
+# Child App: Spark Streaming Applications (Sync Wave 4)
+# Deploys Spark Structured Streaming jobs (runs continuously 24/7)
+# Source: spark-apps/streaming/ (2 files: configmap + streaming app)
+#
+# Differences from batch:
+#   - restartPolicy: Always (auto-restart on failure)
+#   - Runs continuously, never terminates
+#   - Code is mounted from a ConfigMap (not baked into the Docker image)
+# =============================================================================
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: spark-streaming-apps
   namespace: argocd
   finalizers:
+    # Ensures cascade delete removes SparkApplications + ConfigMaps first
     - resources-finalizer.argocd.argoproj.io
   labels:
     app.kubernetes.io/part-of: spark-platform
   annotations:
+    # Sync Wave 4: same wave as batch, runs last
     argocd.argoproj.io/sync-wave: "4"
 spec:
   project: spark-platform
   source:
     repoURL: "https://github.com/thanhtt-demo/argocd-spark-operator.git"  # <-- REPLACE
     targetRevision: HEAD
-    path: spark-apps/streaming
+    path: spark-apps/streaming         # Folder containing ConfigMap + SparkApplication YAML
   destination:
     server: https://kubernetes.default.svc
     namespace: spark-apps
   syncPolicy:
     automated:
-      prune: true
-      selfHeal: true
+      prune: true                      # Delete resources if removed from Git
+      selfHeal: true                   # Recreate if drifted
     syncOptions:
-      - CreateNamespace=false
+      - CreateNamespace=false          # Namespace was already created in wave 1

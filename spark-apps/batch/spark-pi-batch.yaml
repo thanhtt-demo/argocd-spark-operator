@@ -1,3 +1,16 @@
+# =============================================================================
+# SparkApplication: Spark Pi (Batch - Scala)
+# Computes an approximation of Pi using the Monte Carlo method.
+# This is a one-time batch job: runs, computes, then terminates.
+#
+# Architecture:
+#   Driver (1 pod) -> coordinates the computation
+#   Executors (2 pods) -> each generates random points and checks if inside unit circle
+#   Result: Pi ≈ 4 * (points inside circle / total points)
+#
+# The mainApplicationFile uses "local://" scheme, which tells Spark Operator
+# that the JAR file already exists inside the Docker image (no download needed).
+# =============================================================================
 apiVersion: sparkoperator.k8s.io/v1beta2
 kind: SparkApplication
 metadata:
@@ -7,43 +20,53 @@ metadata:
     app.kubernetes.io/part-of: spark-platform
     app.kubernetes.io/component: batch
 spec:
-  type: Scala
-  mode: cluster
-  image: docker.io/library/spark:4.0.1
-  imagePullPolicy: IfNotPresent
-  mainClass: org.apache.spark.examples.SparkPi
+  type: Scala                         # Language: Scala (JVM)
+  mode: cluster                       # Driver runs inside K8s (not client mode)
+  image: docker.io/library/spark:4.0.1          # Official Spark 4.0.1 Docker image
+  imagePullPolicy: IfNotPresent                 # Use cached image if available
+  mainClass: org.apache.spark.examples.SparkPi  # Entry point class
+  # local:// = file is already inside the container (Spark Operator-specific scheme)
   mainApplicationFile: local:///opt/spark/examples/jars/spark-examples.jar
   arguments:
-    - "10000"
+    - "10000"                         # Number of partitions (more = better accuracy)
   sparkVersion: "4.0.1"
+
+  # Restart policy for failed jobs
   restartPolicy:
-    type: OnFailure
-    onFailureRetries: 3
-    onFailureRetryInterval: 10
-    onSubmissionFailureRetries: 5
-    onSubmissionFailureRetryInterval: 20
+    type: OnFailure                   # Only restart on failure (not on success)
+    onFailureRetries: 3               # Retry up to 3 times
+    onFailureRetryInterval: 10        # Wait 10s between retries
+    onSubmissionFailureRetries: 5     # Retry up to 5 times if spark-submit fails
+    onSubmissionFailureRetryInterval: 20  # Wait 20s between submission retries
+
+  # === DRIVER POD ===
+  # The driver coordinates the job: distributes tasks to executors, collects results
   driver:
     cores: 1
-    coreLimit: "1200m"
-    memory: "512m"
+    coreLimit: "1200m"                # Hard CPU limit (1.2 cores)
+    memory: "512m"                    # 512MB memory
     labels:
       app: spark-pi-batch
       version: "4.0.1"
-    serviceAccount: spark-operator-spark
+    serviceAccount: spark-operator-spark  # SA created by Spark Operator Helm chart
+    # Security: run as non-root with minimal privileges
     securityContext:
       capabilities:
         drop:
-          - ALL
-      runAsUser: 185
-      runAsGroup: 185
-      runAsNonRoot: true
-      allowPrivilegeEscalation: false
+          - ALL                       # Drop all Linux capabilities
+      runAsUser: 185                  # Spark user UID (non-root)
+      runAsGroup: 185                 # Spark group GID
+      runAsNonRoot: true              # Enforce non-root execution
+      allowPrivilegeEscalation: false # Prevent privilege escalation
       seccompProfile:
-        type: RuntimeDefault
+        type: RuntimeDefault          # Use container runtime's default seccomp profile
+
+  # === EXECUTOR PODS ===
+  # Executors perform the actual Pi computation in parallel
   executor:
     cores: 1
-    instances: 2
-    memory: "512m"
+    instances: 2                      # 2 executor pods for parallel processing
+    memory: "512m"                    # 512MB memory per executor
     labels:
       app: spark-pi-batch
       version: "4.0.1"

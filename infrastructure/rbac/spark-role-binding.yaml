@@ -1,3 +1,12 @@
+# =============================================================================
+# RoleBinding: spark-app-role-binding
+# Binds the spark-app-role (permissions) to the spark-app ServiceAccount.
+# This grants the SA the permissions defined in the Role.
+#
+# Chain: SparkApplication -> driver pod uses SA "spark-app"
+#        -> RoleBinding grants spark-app-role permissions
+#        -> Driver can now create executor pods, services, etc.
+# =============================================================================
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
@@ -8,9 +17,9 @@ metadata:
     app.kubernetes.io/component: spark-apps
 subjects:
   - kind: ServiceAccount
-    name: spark-app
+    name: spark-app                   # The SA used by Spark driver pods
     namespace: spark-apps
 roleRef:
   kind: Role
-  name: spark-app-role
+  name: spark-app-role                # References the Role defined in spark-role.yaml
   apiGroup: rbac.authorization.k8s.io

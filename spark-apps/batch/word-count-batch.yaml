@@ -1,3 +1,16 @@
+# =============================================================================
+# SparkApplication: Word Count (Batch - Python/PySpark)
+# Classic word count example using PySpark.
+# Reads a text file and counts the frequency of each word.
+#
+# Key URI schemes:
+#   - mainApplicationFile: "local://" = Spark Operator scheme, file is inside the container
+#   - arguments (data file): "file://" = Hadoop FileSystem scheme for local files
+#   Note: local:// and file:// are different! local:// is Spark Operator-specific,
+#   while file:// is a standard Hadoop FileSystem URI.
+#
+# The input file people.txt is bundled in the official Spark Docker image.
+# =============================================================================
 apiVersion: sparkoperator.k8s.io/v1beta2
 kind: SparkApplication
 metadata:
@@ -7,24 +20,32 @@ metadata:
     app.kubernetes.io/part-of: spark-platform
     app.kubernetes.io/component: batch
 spec:
-  type: Python
-  pythonVersion: "3"
-  mode: cluster
+  type: Python                        # Language: Python (PySpark)
+  pythonVersion: "3"                  # Python 3.x
+  mode: cluster                       # Driver runs inside K8s
   image: docker.io/library/spark:4.0.1
   imagePullPolicy: IfNotPresent
+  # PySpark script bundled in the Spark Docker image
   mainApplicationFile: local:///opt/spark/examples/src/main/python/wordcount.py
   arguments:
+    # Input file: uses file:// (Hadoop FileSystem scheme) for local file access
     - "file:///opt/spark/examples/src/main/resources/people.txt"
   sparkVersion: "4.0.1"
+
+  # Spark configuration properties (passed as --conf to spark-submit)
   sparkConf:
-    spark.eventLog.enabled: "false"
-    spark.ui.enabled: "true"
+    spark.eventLog.enabled: "false"   # Disable event logging (no history server)
+    spark.ui.enabled: "true"          # Enable Spark UI for monitoring
+
+  # Restart policy for failed jobs
   restartPolicy:
     type: OnFailure
     onFailureRetries: 3
     onFailureRetryInterval: 10
     onSubmissionFailureRetries: 5
     onSubmissionFailureRetryInterval: 20
+
+  # === DRIVER POD ===
   driver:
     cores: 1
     coreLimit: "1200m"
@@ -43,9 +64,11 @@ spec:
       allowPrivilegeEscalation: false
       seccompProfile:
         type: RuntimeDefault
+
+  # === EXECUTOR PODS ===
   executor:
     cores: 1
-    instances: 2
+    instances: 2                      # 2 executors for parallel word counting
     memory: "512m"
     labels:
       app: word-count-batch

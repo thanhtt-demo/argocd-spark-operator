@@ -1,6 +1,8 @@
-# ConfigMap chứa source code PySpark cho streaming job
-# ConfigMap được mount vào pod tại /opt/spark-apps/ (xem rate-structured-streaming.yaml)
-# Cách này cho phép thay đổi code mà không cần build lại Docker image
+# =============================================================================
+# ConfigMap containing the PySpark source code for the streaming job.
+# This ConfigMap is mounted into the pod at /opt/spark-apps/ (see rate-structured-streaming.yaml).
+# This approach allows changing the code without rebuilding the Docker image.
+# =============================================================================
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -10,36 +12,36 @@ metadata:
     app.kubernetes.io/part-of: spark-platform
     app.kubernetes.io/component: streaming
 data:
-  # Key = filename khi mount vào pod → /opt/spark-apps/rate_streaming.py
+  # Key = filename when mounted in the pod -> /opt/spark-apps/rate_streaming.py
   rate_streaming.py: |
     """
     Spark Structured Streaming - Rate Source Demo
 
-    Flow:  Rate Source (10 rows/sec) → Windowed Aggregation (30s) → Console Output
-           + Total event counter tích lũy từ lúc job bắt đầu
+    Flow:  Rate Source (10 rows/sec) -> Windowed Aggregation (30s) -> Console Output
+           + Total event counter accumulated since the job started
 
-    Rate source là built-in source của Spark, tự generate data (timestamp, value)
-    mà không cần Kafka hay external system. Rất phù hợp cho testing/demo.
+    Rate source is a built-in Spark source that auto-generates data (timestamp, value)
+    without requiring Kafka or any external system. Ideal for testing/demo.
     """
     from pyspark.sql import SparkSession
     from pyspark.sql.functions import window, col, count, avg, sum as spark_sum, lit
 
-    # Tạo SparkSession - entry point cho mọi Spark application
+    # Create SparkSession - entry point for every Spark application
     spark = SparkSession.builder \
         .appName("RateStreamingDemo") \
         .getOrCreate()
 
     # === SOURCE ===
-    # Rate source: tự động generate rows (timestamp, value) với tốc độ 10 rows/giây
-    # Không cần Kafka, Kinesis hay bất kỳ external system nào
+    # Rate source: auto-generates rows (timestamp, value) at 10 rows/second
+    # No Kafka, Kinesis, or any external system needed
     df = spark.readStream \
         .format("rate") \
         .option("rowsPerSecond", 10) \
         .load()
 
     # === QUERY 1: Windowed Aggregation ===
-    # Watermark: cho phép data đến trễ tối đa 1 phút trước khi bị bỏ qua
-    # Window: nhóm events theo cửa sổ 30 giây, tính count và average
+    # Watermark: allows data to arrive up to 1 minute late before being discarded
+    # Window: groups events into 30-second windows, computes count and average
     windowed = df \
         .withWatermark("timestamp", "1 minute") \
         .groupBy(window(col("timestamp"), "30 seconds")) \
@@ -57,8 +59,8 @@ data:
         .start()
 
     # === QUERY 2: Total Event Counter ===
-    # Đếm tổng số event đã xử lý từ lúc job bắt đầu chạy
-    # outputMode="complete": mỗi micro-batch ghi lại toàn bộ kết quả (1 row duy nhất)
+    # Counts total events processed since the job started
+    # outputMode="complete": each micro-batch outputs the full result (1 single row)
     total_count = df \
         .agg(
             count("*").alias("total_events"),
@@ -73,5 +75,5 @@ data:
         .trigger(processingTime="30 seconds") \
         .start()
 
-    # Chờ cả 2 query - streaming job chạy liên tục cho đến khi bị stop
+    # Wait for both queries - streaming job runs continuously until stopped
     spark.streams.awaitAnyTermination()

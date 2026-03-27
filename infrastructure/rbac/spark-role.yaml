@@ -1,3 +1,14 @@
+# =============================================================================
+# Role: spark-app-role
+# Defines the permissions that Spark driver pods need within the spark-apps namespace.
+# Follows the principle of least privilege - only grants what's necessary.
+#
+# Permissions breakdown:
+#   - pods: Driver creates/manages executor pods
+#   - services: Driver creates a headless service for Spark UI
+#   - configmaps: Driver stores spark-submit metadata and app config
+#   - persistentvolumeclaims: For shuffle data or intermediate storage
+# =============================================================================
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -7,15 +18,19 @@ metadata:
     app.kubernetes.io/part-of: spark-platform
     app.kubernetes.io/component: spark-apps
 rules:
+  # Pods: driver creates executor pods and monitors their status
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list", "watch", "create", "delete", "patch"]
+  # Services: driver creates a service for Spark UI access
   - apiGroups: [""]
     resources: ["services"]
     verbs: ["get", "list", "watch", "create", "delete"]
+  # ConfigMaps: driver stores app metadata and configuration
   - apiGroups: [""]
     resources: ["configmaps"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # PVCs: for persistent storage (shuffle data, checkpoints)
   - apiGroups: [""]
     resources: ["persistentvolumeclaims"]
     verbs: ["get", "list", "watch", "create", "delete"]

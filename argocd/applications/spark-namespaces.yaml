@@ -1,25 +1,35 @@
+# =============================================================================
+# Child App: Spark Namespaces (Sync Wave 1)
+# First app to deploy - creates 2 namespaces: spark-operator and spark-apps.
+# Must run first because subsequent apps require these namespaces to exist.
+# Source: infrastructure/namespaces/ (spark-operator-ns.yaml, spark-apps-ns.yaml)
+# =============================================================================
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: spark-namespaces
   namespace: argocd
   finalizers:
+    # On cascade delete: ArgoCD deletes the namespaces before removing the Application object
     - resources-finalizer.argocd.argoproj.io
   labels:
     app.kubernetes.io/part-of: spark-platform
   annotations:
+    # Sync Wave 1 = runs first in the deployment chain
+    # ArgoCD ordering: wave 1 -> 2 -> 3 -> 4 (lower numbers run first)
     argocd.argoproj.io/sync-wave: "1"
 spec:
-  project: spark-platform
+  project: spark-platform            # Belongs to the spark-platform project (see spark-project.yaml)
   source:
     repoURL: "https://github.com/thanhtt-demo/argocd-spark-operator.git"  # <-- REPLACE
     targetRevision: HEAD
-    path: infrastructure/namespaces
+    path: infrastructure/namespaces   # Folder containing namespace YAML files
   destination:
     server: https://kubernetes.default.svc
+    # No namespace specified because Namespace is a cluster-scoped resource
   syncPolicy:
     automated:
-      prune: true
-      selfHeal: true
+      prune: true                     # Delete namespace if removed from Git
+      selfHeal: true                  # Recreate if deleted from the cluster
     syncOptions:
       - CreateNamespace=false
