@@ -14,7 +14,7 @@ spec:
   imagePullPolicy: IfNotPresent
   mainApplicationFile: local:///opt/spark/examples/src/main/python/wordcount.py
   arguments:
-    - "file:///opt/spark/README.md"
+    - "file:///opt/spark/examples/src/main/resources/people.txt"
   sparkVersion: "4.0.1"
   sparkConf:
     spark.eventLog.enabled: "false"
