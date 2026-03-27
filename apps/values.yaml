@@ -101,3 +101,59 @@ applications:
     path: spark-streaming
     namespace: spark-apps
     syncWave: "4"
+
+  # ---------- Wave 2: Dagster (External Helm Chart) ----------
+  # Dagster orchestration platform: webserver, daemon, user-code deployments, PostgreSQL.
+  # Runs alongside Spark Operator at wave 2 (after namespaces).
+  - name: dagster
+    syncWave: "2"
+    namespace: dagster
+    helm:
+      repoURL: https://dagster-io.github.io/helm
+      chart: dagster
+      targetRevision: "*"
+      releaseName: dagster
+      values:
+        # PostgreSQL: embedded database for Dagster metadata
+        postgresql:
+          enabled: true
+          postgresqlUsername: dagster
+          postgresqlPassword: dagster
+          postgresqlDatabase: dagster
+          service:
+            port: 5432
+        # Dagster webserver (UI)
+        dagsterWebserver:
+          replicaCount: 1
+          service:
+            type: ClusterIP
+            port: 80
+        # User code deployments: your Dagster definitions
+        dagster-user-deployments:
+          enabled: true
+          deployments:
+            - name: "user-code"
+              image:
+                repository: "vnthanhtt/spark-dagster-project"
+                tag: "1"
+                pullPolicy: Always
+              dagsterApiGrpcArgs:
+                - "--python-file"
+                - "/app/iris_analysis/definitions.py"
+              port: 3030
+        # Resource limits for Dagster components
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

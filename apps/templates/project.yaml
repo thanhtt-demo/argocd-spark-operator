@@ -17,6 +17,7 @@ spec:
   sourceRepos:
     - {{ .Values.config.source.repoURL | quote }}
     - "https://kubeflow.github.io/spark-operator"
+    - "https://dagster-io.github.io/helm"
 
   # === DESTINATIONS ===
   destinations:
@@ -24,6 +25,8 @@ spec:
       namespace: spark-operator
     - server: {{ .Values.config.destination.server }}
       namespace: spark-apps
+    - server: {{ .Values.config.destination.server }}
+      namespace: dagster
     - server: {{ .Values.config.destination.server }}
       namespace: ""                   # Allow cluster-scoped resources (Namespace, CRDs)
 
