@@ -63,7 +63,8 @@ oauth2-proxy:
       http_address = "0.0.0.0:4180"
 
       # --- Misc ---
-      email_domains = ["*"]
+      # Do NOT set email_domains = ["*"] — it bypasses the email whitelist (OR logic).
+      # Only authenticated_emails_file controls access.
       pass_authorization_header = true
       set_authorization_header = true
       set_xauthrequest = true
