@@ -29,6 +29,9 @@ oauth2-proxy:
 
       # Disable OIDC auto-discovery so it does NOT override our custom login_url
       skip_oidc_discovery = true
+      # Skip issuer verification: token iss="http://localhost:9090/..." (browser)
+      # differs from oidc_issuer_url (cluster-internal). This is expected in port-forward setup.
+      insecure_oidc_skip_issuer_verification = true
 
       # login_url: where BROWSER redirects to (must be localhost since we use port-forward)
       login_url = "http://localhost:9090/realms/dagster/protocol/openid-connect/auth"
