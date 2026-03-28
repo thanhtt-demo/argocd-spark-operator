@@ -19,7 +19,17 @@ oauth2-proxy:
       # --- Provider: Keycloak OIDC ---
       provider = "keycloak-oidc"
       provider_display_name = "Keycloak"
+
+      # oidc_issuer_url: used by oauth2-proxy pod (inside cluster) to discover endpoints & validate tokens
       oidc_issuer_url = "http://keycloak.keycloak.svc.cluster.local:8080/realms/dagster"
+
+      # login_url: where BROWSER redirects to (must be localhost since we use port-forward)
+      # redeem_url, oidc_jwks_url, profile_url: used by oauth2-proxy pod (inside cluster)
+      login_url = "http://localhost:9090/realms/dagster/protocol/openid-connect/auth"
+      redeem_url = "http://keycloak.keycloak.svc.cluster.local:8080/realms/dagster/protocol/openid-connect/token"
+      oidc_jwks_url = "http://keycloak.keycloak.svc.cluster.local:8080/realms/dagster/protocol/openid-connect/certs"
+      profile_url = "http://keycloak.keycloak.svc.cluster.local:8080/realms/dagster/protocol/openid-connect/userinfo"
+
       redirect_url = "http://localhost:4180/oauth2/callback"
       code_challenge_method = "S256"
 
