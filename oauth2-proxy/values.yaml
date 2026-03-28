@@ -27,6 +27,9 @@ oauth2-proxy:
       # oidc_issuer_url: used by oauth2-proxy pod (inside cluster) for token validation
       oidc_issuer_url = "http://keycloak.keycloak.svc.cluster.local:8080/realms/dagster"
 
+      # Disable OIDC auto-discovery so it does NOT override our custom login_url
+      skip_oidc_discovery = true
+
       # login_url: where BROWSER redirects to (must be localhost since we use port-forward)
       login_url = "http://localhost:9090/realms/dagster/protocol/openid-connect/auth"
       # redeem_url, oidc_jwks_url, profile_url: used by oauth2-proxy pod (cluster-internal)
