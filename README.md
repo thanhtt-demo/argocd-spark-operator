@@ -7,28 +7,29 @@ Follows the [argocd-example-apps](https://github.com/argoproj/argocd-example-app
 ## Architecture Overview
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                        ArgoCD (GitOps)                       │
-│                                                              │
-│  ┌─────────────┐   Helm App-of-Apps (apps/ chart)            │
-│  │ spark-       │──► spark-namespaces    (sync-wave: 1)      │
-│  │ platform     │──► spark-operator      (sync-wave: 2, Helm)│
-│  │ (root app)   │──► spark-rbac          (sync-wave: 3)      │
-│  │              │──► spark-batch-apps    (sync-wave: 4)      │
-│  │              │──► spark-streaming-apps (sync-wave: 4)      │
-│  └─────────────┘                                             │
-└──────────────────────────────────────────────────────────────┘
-                              │
-              ┌───────────────┼───────────────┐
-              ▼               ▼               ▼
-   ┌──────────────┐  ┌──────────────┐  ┌─────────────┐
-   │ spark-operator│  │  spark-apps  │  │  spark-apps  │
-   │  namespace    │  │  (batch)     │  │  (streaming) │
-   │              │  │              │  │              │
-   │ Spark        │  │ SparkPi      │  │ Rate         │
-   │ Operator     │  │ WordCount    │  │ Structured   │
-   │ (controller) │  │ Scheduled    │  │ Streaming    │
-   └──────────────┘  └──────────────┘  └─────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                          ArgoCD (GitOps)                            │
+│                                                                     │
+│  ┌─────────────┐   Helm App-of-Apps (apps/ chart)                   │
+│  │ spark-       │──► spark-namespaces     (sync-wave: 1)            │
+│  │ platform     │──► dagster              (sync-wave: 2, Helm)      │
+│  │ (root app)   │──► keycloak             (sync-wave: 2, Helm)      │
+│  │              │──► oauth2-proxy         (sync-wave: 3, Helm)      │
+│  └─────────────┘                                                    │
+└─────────────────────────────────────────────────────────────────────┘
+                                │
+            ┌───────────────────┼───────────────────┐
+            ▼                   ▼                   ▼
+  ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐
+  │ dagster namespace │ │keycloak namespace│ │ dagster namespace │
+  │                  │ │                  │ │                  │
+  │ Dagster          │ │ Keycloak         │ │ OAuth2 Proxy     │
+  │ (webserver,      │ │ (IAM / OIDC      │ │ (auth gateway,   │
+  │  daemon, etc.)   │ │  provider)       │ │  email whitelist) │
+  └──────────────────┘ └──────────────────┘ └──────────────────┘
+
+  Browser ──► OAuth2 Proxy (:4180) ──► Keycloak login (:9090)
+         ◄── authenticated ──────────► Dagster UI (upstream)
 ```
 
 ## Project Structure
@@ -51,8 +52,9 @@ argocd-spark-operator/
 ├── oauth2-proxy/                          # Wave 3: OAuth2 Proxy for Dagster authentication
 │   ├── Chart.yaml                         # Umbrella chart wrapping oauth2-proxy
 │   ├── values.yaml                        # Keycloak OIDC + email whitelist config
-│   ├── configmap-allowed-emails.yaml      # Email whitelist (add/remove users here)
-│   └── secret-example.yaml               # Example secret (DO NOT apply directly)
+│   ├── secret-example.yaml               # Example secret (DO NOT apply directly)
+│   └── templates/
+│       └── configmap-allowed-emails.yaml  # Email whitelist (add/remove users here)
 ├── namespaces/                            # Wave 1: Namespace manifests
 │   ├── spark-operator-ns.yaml
 │   ├── spark-apps-ns.yaml
@@ -182,10 +184,11 @@ kubectl apply -f app-of-apps.yaml
 
 This single command triggers the entire deployment chain:
 
-1. **Wave 1** - Creates `spark-operator` and `spark-apps` namespaces
-2. **Wave 2** - Installs Spark Operator via Helm chart (with webhook, metrics)
-3. **Wave 3** - Sets up RBAC (ServiceAccount, Role, RoleBinding) in `spark-apps`
-4. **Wave 4** - Deploys batch and streaming SparkApplications
+1. **Wave 1** - Creates namespaces (`spark-operator`, `spark-apps`, `dagster`)
+2. **Wave 2** - Installs Dagster (umbrella Helm chart) and Keycloak (umbrella Helm chart)
+3. **Wave 3** - Deploys OAuth2 Proxy (umbrella Helm chart) in `dagster` namespace
+
+> **NOTE**: Spark Operator, RBAC, and Spark Applications are defined in `apps/values.yaml` but currently commented out. Uncomment them to enable Spark workloads.
 
 ---
 
@@ -262,7 +265,7 @@ kubectl create secret generic oauth2-proxy-secret `
 
 ### 3a.8: Manage User Access (Email Whitelist)
 
-Edit `oauth2-proxy/configmap-allowed-emails.yaml` to control who can access Dagster:
+Edit `oauth2-proxy/templates/configmap-allowed-emails.yaml` to control who can access Dagster:
 
 ```yaml
 data:
@@ -346,14 +349,22 @@ Open browser: `http://localhost:4040`
 ### Port-forward OAuth2 Proxy
 
 ```powershell
-kubectl port-forward svc/oauth2-proxy-umbrella-oauth2-proxy 4180:4180 -n dagster
+kubectl port-forward svc/oauth2-proxy 4180:4180 -n dagster
+```
+
+### Port-forward Keycloak (required for login redirect)
+
+```powershell
+kubectl port-forward svc/keycloak 9090:8080 -n keycloak
 ```
 
 ### Open Dagster
 
 Open browser: `http://localhost:4180`
 
-You will be redirected to Keycloak login. After authentication, you'll be proxied to Dagster UI.
+You will be redirected to Keycloak login at `http://localhost:9090`. After authentication, you'll be proxied to Dagster UI.
+
+> **NOTE**: Both port-forwards (OAuth2 Proxy on 4180 and Keycloak on 9090) must be running simultaneously.
 
 ### Verify OAuth2 Proxy
 
@@ -492,6 +503,18 @@ User's email is not in the whitelist. Add it to `oauth2-proxy/configmap-allowed-
    ```powershell
    kubectl get secret oauth2-proxy-secret -n dagster -o jsonpath='{.data}'
    ```
+3. Check oauth2-proxy logs for specific errors:
+   ```powershell
+   kubectl logs -l app.kubernetes.io/name=oauth2-proxy -n dagster --tail=50
+   ```
+
+### OAuth2 Proxy: issuer mismatch error
+
+If you see `id token issued by a different provider`, this is expected in a port-forward setup. The `insecure_oidc_skip_issuer_verification = true` setting in `oauth2-proxy/values.yaml` handles this.
+
+### OAuth2 Proxy: 401 on userinfo endpoint
+
+If you see `failed to fetch claims from profile URL: unexpected status "401"`, the `skip_claims_from_profile_url = true` setting handles this. The email claim is read from the ID token directly.
 
 ---
 
