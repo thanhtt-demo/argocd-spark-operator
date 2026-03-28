@@ -39,6 +39,10 @@ oauth2-proxy:
       redeem_url = "http://keycloak.keycloak.svc.cluster.local:8080/realms/dagster/protocol/openid-connect/token"
       oidc_jwks_url = "http://keycloak.keycloak.svc.cluster.local:8080/realms/dagster/protocol/openid-connect/certs"
       profile_url = "http://keycloak.keycloak.svc.cluster.local:8080/realms/dagster/protocol/openid-connect/userinfo"
+      # Skip fetching claims from userinfo endpoint — email is already in the ID token,
+      # and the userinfo call fails with 401 because the access token issuer (localhost)
+      # doesn't match the cluster-internal URL.
+      skip_claims_from_profile_url = true
 
       redirect_url = "http://localhost:4180/oauth2/callback"
       code_challenge_method = "S256"
