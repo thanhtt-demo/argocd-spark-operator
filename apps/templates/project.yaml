@@ -19,6 +19,7 @@ spec:
     - "https://kubeflow.github.io/spark-operator"
     - "https://dagster-io.github.io/helm"
     - "registry-1.docker.io/cloudpirates/*"
+    - "https://oauth2-proxy.github.io/manifests"
 
   # === DESTINATIONS ===
   destinations:

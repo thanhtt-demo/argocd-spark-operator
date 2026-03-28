@@ -1,0 +1,22 @@
+# =============================================================================
+# ConfigMap: Allowed Emails for OAuth2 Proxy
+# Controls which Keycloak users can access Dagster UI.
+#
+# How to manage access:
+#   - Add a user: add their email below (one per line)
+#   - Remove a user: delete their email line
+#   - Push to Git → ArgoCD auto-syncs → access updated
+#
+# NOTE: Users must exist in Keycloak (dagster realm) AND be listed here.
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oauth2-proxy-allowed-emails
+  namespace: dagster
+  labels:
+    app.kubernetes.io/part-of: spark-platform
+    app.kubernetes.io/managed-by: argocd
+data:
+  allowed-emails.txt: |
+    thanhtt42@vpbank.com.vn

@@ -42,9 +42,21 @@ argocd-spark-operator/
 │   └── templates/
 │       ├── project.yaml                   # Generates AppProject
 │       └── applications.yaml              # Loops over values to generate Applications
+├── dagster/                               # Wave 2: Dagster orchestration platform (umbrella chart)
+│   ├── Chart.yaml
+│   └── values.yaml
+├── keycloak/                              # Wave 2: Keycloak IAM (umbrella chart)
+│   ├── Chart.yaml
+│   └── values.yaml
+├── oauth2-proxy/                          # Wave 3: OAuth2 Proxy for Dagster authentication
+│   ├── Chart.yaml                         # Umbrella chart wrapping oauth2-proxy
+│   ├── values.yaml                        # Keycloak OIDC + email whitelist config
+│   ├── configmap-allowed-emails.yaml      # Email whitelist (add/remove users here)
+│   └── secret-example.yaml               # Example secret (DO NOT apply directly)
 ├── namespaces/                            # Wave 1: Namespace manifests
 │   ├── spark-operator-ns.yaml
-│   └── spark-apps-ns.yaml
+│   ├── spark-apps-ns.yaml
+│   └── dagster-ns.yaml
 ├── rbac/                                  # Wave 3: RBAC manifests
 │   ├── spark-service-account.yaml
 │   ├── spark-role.yaml
@@ -69,6 +81,8 @@ argocd-spark-operator/
 | **SparkApplication** | CRD for one-time batch Spark jobs |
 | **ScheduledSparkApplication** | CRD for cron-based recurring Spark jobs |
 | **Structured Streaming** | Long-running SparkApplication with `restartPolicy: Always` |
+| **OAuth2 Proxy** | Reverse proxy that authenticates Dagster UI access via Keycloak OIDC |
+| **Email Whitelist** | ConfigMap-based access control — only listed emails can access Dagster |
 
 ---
 
@@ -94,7 +108,7 @@ choco install k9s
 ### Start Minikube
 
 ```powershell
-minikube start --driver=docker --cpus=4 --memory=8192
+minikube start --driver=docker
 ```
 
 ### Create kubectl alias
@@ -175,6 +189,97 @@ This single command triggers the entire deployment chain:
 
 ---
 
+## Step 3a: Configure Keycloak for Dagster Authentication
+
+OAuth2 Proxy authenticates Dagster UI users via Keycloak OIDC. This requires a one-time manual setup in Keycloak.
+
+### 3a.1: Access Keycloak Admin Console
+
+```powershell
+kubectl port-forward svc/keycloak 9090:8080 -n keycloak
+```
+
+Open browser: `http://localhost:9090` (user: `admin`, password: `admin`)
+
+### 3a.2: Create Realm
+
+1. Click **Keycloak** dropdown (top-left) → **Create realm**
+2. Realm name: `dagster` → **Create**
+
+### 3a.3: Create OIDC Client
+
+1. Navigate to **Clients** → **Create client**
+2. Client type: **OpenID Connect**
+3. Client ID: `dagster-oauth2-proxy` → **Next**
+4. Client authentication: **ON**
+5. Authentication flow: **Standard flow** selected, **Direct access grants** deselected → **Next**
+6. Settings / Access settings:
+   - Valid redirect URIs: `http://localhost:4180/oauth2/callback`
+   - Web Origins: `http://localhost:4180`
+7. **Save**
+
+### 3a.4: Create Audience Mapper
+
+1. Navigate to **Clients** → `dagster-oauth2-proxy` → **Client scopes**
+2. Click `dagster-oauth2-proxy-dedicated`
+3. **Configure a new mapper** → select **Audience**
+   - Name: `aud-mapper-dagster`
+   - Included Client Audience: `dagster-oauth2-proxy`
+   - Add to ID token: **ON**
+   - Add to access token: **ON**
+4. **Save**
+
+### 3a.5: Copy Client Secret
+
+1. Navigate to **Clients** → `dagster-oauth2-proxy` → **Credentials** tab
+2. Copy the **Client secret** value (you'll need it in the next step)
+
+### 3a.6: Create Test Users
+
+1. Navigate to **Users** → **Add user**
+2. Fill in: Username, Email, First name, Last name
+3. Set **Email verified**: **ON** → **Create**
+4. Go to **Credentials** tab → **Set password** → uncheck **Temporary** → **Save**
+5. Repeat for additional users
+
+> **IMPORTANT**: The user's email must match an entry in `oauth2-proxy/configmap-allowed-emails.yaml` to be allowed access.
+
+### 3a.7: Create Kubernetes Secret for OAuth2 Proxy
+
+```powershell
+# Generate a cookie secret
+python -c "import os,base64; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
+
+# Create the secret (replace <VALUES> with actual values)
+kubectl create secret generic oauth2-proxy-secret `
+  --namespace dagster `
+  --from-literal=client-id=dagster-oauth2-proxy `
+  --from-literal=client-secret=<YOUR_KEYCLOAK_CLIENT_SECRET> `
+  --from-literal=cookie-secret=<GENERATED_COOKIE_SECRET>
+```
+
+> **NOTE**: Never commit real secrets to Git. See `oauth2-proxy/secret-example.yaml` for reference. For production, use Sealed Secrets or External Secrets Operator.
+
+### 3a.8: Manage User Access (Email Whitelist)
+
+Edit `oauth2-proxy/configmap-allowed-emails.yaml` to control who can access Dagster:
+
+```yaml
+data:
+  allowed-emails.txt: |
+    alice@company.com
+    bob@company.com
+```
+
+| User | Email | In whitelist? | Access |
+|------|-------|---------------|--------|
+| Alice | alice@company.com | Yes | **Allowed** |
+| Charlie | charlie@company.com | No | **Denied (403)** |
+
+Push to Git → ArgoCD auto-syncs → access updated immediately.
+
+---
+
 ## Step 4: Verify Deployment
 
 ### Check ArgoCD applications
@@ -236,6 +341,32 @@ Open browser: `http://localhost:4040`
 
 ---
 
+## Step 6: Access Dagster UI (via OAuth2 Proxy)
+
+### Port-forward OAuth2 Proxy
+
+```powershell
+kubectl port-forward svc/oauth2-proxy-umbrella-oauth2-proxy 4180:4180 -n dagster
+```
+
+### Open Dagster
+
+Open browser: `http://localhost:4180`
+
+You will be redirected to Keycloak login. After authentication, you'll be proxied to Dagster UI.
+
+### Verify OAuth2 Proxy
+
+```powershell
+# Check oauth2-proxy pod
+kubectl get pods -n dagster | Select-String oauth2-proxy
+
+# Check oauth2-proxy logs
+kubectl logs -l app.kubernetes.io/name=oauth2-proxy -n dagster
+```
+
+---
+
 ## Spark Applications Included
 
 ### Batch Applications
@@ -267,6 +398,8 @@ Open browser: `http://localhost:4040`
 - **Metrics**: Prometheus-compatible metrics from Spark Operator
 - **RBAC**: Least-privilege service accounts for Spark drivers
 - **Namespace Isolation**: Separate namespaces for operator and applications
+- **Authentication**: Dagster UI protected by OAuth2 Proxy + Keycloak OIDC
+- **Email Whitelist**: GitOps-managed access control via ConfigMap
 
 ---
 
@@ -337,6 +470,29 @@ argocd app get spark-platform
 argocd app sync spark-platform
 ```
 
+### OAuth2 Proxy not starting
+
+```powershell
+kubectl get pods -n dagster | Select-String oauth2-proxy
+kubectl logs -l app.kubernetes.io/name=oauth2-proxy -n dagster
+kubectl describe pod -l app.kubernetes.io/name=oauth2-proxy -n dagster
+```
+
+### OAuth2 Proxy returns 403 Forbidden
+
+User's email is not in the whitelist. Add it to `oauth2-proxy/configmap-allowed-emails.yaml` and push to Git.
+
+### OAuth2 Proxy returns 500 / redirect loop
+
+1. Verify Keycloak is reachable from within the cluster:
+   ```powershell
+   kubectl run curl-test --rm -it --image=curlimages/curl -- curl -s http://keycloak.keycloak.svc.cluster.local:8080/realms/dagster/.well-known/openid-configuration
+   ```
+2. Verify the secret exists and has correct values:
+   ```powershell
+   kubectl get secret oauth2-proxy-secret -n dagster -o jsonpath='{.data}'
+   ```
+
 ---
 
 ## Cleanup
@@ -363,5 +519,8 @@ minikube stop
 - [Spark Operator User Guide](https://www.kubeflow.org/docs/components/spark-operator/user-guide/)
 - [ArgoCD Documentation](https://argo-cd.readthedocs.io/)
 - [ArgoCD App-of-Apps Pattern](https://argo-cd.readthedocs.io/en/stable/operator-manual/cluster-bootstrapping/)
+- [OAuth2 Proxy Documentation](https://oauth2-proxy.github.io/oauth2-proxy/)
+- [OAuth2 Proxy Keycloak OIDC Provider](https://oauth2-proxy.github.io/oauth2-proxy/configuration/providers/keycloak_oidc)
+- [Keycloak Documentation](https://www.keycloak.org/documentation)
 - [SMACAcademy ArgoCD Course](https://github.com/SMACAcademy/ArgoCD-Complete-Master-Course/tree/main)
 - [Udemy ArgoCD Master Course](https://ascend.udemy.com/course/argo-cd-master-course-expert-techniques-in-gitops-devops/learn/lecture/41742588#overview)
