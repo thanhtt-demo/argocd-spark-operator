@@ -1,13 +1,13 @@
 # =============================================================================
-# Namespace: dagster
-# Dedicated namespace for the Dagster orchestration platform.
-# Components: webserver, daemon, user-code deployments, PostgreSQL.
+# Namespace: keycloak
+# Dedicated namespace for the Keycloak identity and access management platform.
+# Components: Keycloak server, PostgreSQL.
 # Managed by ArgoCD (sync wave 1 - created first).
 # =============================================================================
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: dagster
+  name: keycloak
   labels:
     app.kubernetes.io/part-of: spark-platform
     app.kubernetes.io/managed-by: argocd

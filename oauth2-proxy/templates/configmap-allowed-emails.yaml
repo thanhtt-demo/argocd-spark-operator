@@ -19,4 +19,4 @@ metadata:
     app.kubernetes.io/managed-by: argocd
 data:
   allowed-emails.txt: |
-    thanhtt42@vpbank.com.vn
+    thanhtt42@abc.com
