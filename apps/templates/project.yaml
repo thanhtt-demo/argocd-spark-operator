@@ -20,6 +20,7 @@ spec:
     - "https://dagster-io.github.io/helm"
     - "registry-1.docker.io/cloudpirates/*"
     - "https://oauth2-proxy.github.io/manifests"
+    - "https://starrocks.github.io/starrocks-kubernetes-operator"
 
   # === DESTINATIONS ===
   destinations:
@@ -31,6 +32,8 @@ spec:
       namespace: dagster
     - server: {{ .Values.config.destination.server }}
       namespace: keycloak
+    - server: {{ .Values.config.destination.server }}
+      namespace: starrocks
     - server: {{ .Values.config.destination.server }}
       namespace: ""                   # Allow cluster-scoped resources (Namespace, CRDs)
 

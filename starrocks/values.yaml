@@ -1,0 +1,55 @@
+# =============================================================================
+# StarRocks Helm Chart Values (Umbrella Chart)
+# Chart: kube-starrocks (https://starrocks.github.io/starrocks-kubernetes-operator)
+#
+# Values are nested under "kube-starrocks:" because this is an umbrella chart.
+# Helm passes values under the dependency name to the subchart.
+# Edit values here → push to Git → ArgoCD auto-syncs.
+#
+# kube-starrocks contains two subcharts: operator and starrocks.
+# Operator values go under kube-starrocks.operator
+# StarRocks cluster values go under kube-starrocks.starrocks
+# =============================================================================
+kube-starrocks:
+
+  # === Operator ===
+  # Manages StarRocksCluster CRDs
+  operator:
+    replicaCount: 1
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+
+  # === StarRocks Cluster ===
+  starrocks:
+    # FE (Frontend): query parsing, metadata, planning
+    starrocksFESpec:
+      replicas: 1                    # Single replica for local dev (Minikube)
+      image:
+        repository: starrocks/fe-ubuntu
+        tag: "4.1.0"
+      resources:
+        requests:
+          cpu: 500m
+          memory: 1Gi
+        limits:
+          cpu: "2"
+          memory: 4Gi
+
+    # BE (Backend): data storage and query execution
+    starrocksBESpec:
+      replicas: 1                    # Single replica for local dev (Minikube)
+      image:
+        repository: starrocks/be-ubuntu
+        tag: "4.1.0"
+      resources:
+        requests:
+          cpu: 500m
+          memory: 1Gi
+        limits:
+          cpu: "2"
+          memory: 4Gi

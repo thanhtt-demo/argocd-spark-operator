@@ -1,0 +1,10 @@
+# =============================================================================
+# Namespace: starrocks
+# Dedicated namespace for StarRocks FE, BE, and Operator pods.
+# =============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: starrocks
+  labels:
+    app.kubernetes.io/part-of: spark-platform

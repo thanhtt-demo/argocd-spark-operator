@@ -1,0 +1,16 @@
+# =============================================================================
+# Umbrella Chart: StarRocks
+# Wraps the StarRocks kube-starrocks Helm chart as a dependency.
+# ArgoCD points to this folder → Helm resolves the dependency automatically.
+# Values in values.yaml are passed to the kube-starrocks subchart.
+# =============================================================================
+apiVersion: v2
+name: starrocks-umbrella
+description: Umbrella chart for StarRocks (FE + BE + Operator)
+type: application
+version: 0.1.0
+
+dependencies:
+  - name: kube-starrocks
+    version: "1.11.4"
+    repository: "file://charts/kube-starrocks"
