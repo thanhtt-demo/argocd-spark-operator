@@ -73,48 +73,48 @@ applications:
   # ---------- Wave 2: Dagster (Umbrella Helm Chart) ----------
   # Dagster orchestration platform: webserver, daemon, user-code, PostgreSQL.
   # Chart + values in dagster/ folder.
-  - name: dagster
-    path: dagster
-    namespace: dagster
-    syncWave: "2"
-    syncOptions:
-      - CreateNamespace=true
-    retry:
-      limit: 5
-      backoff:
-        duration: 5s
-        factor: 2
-        maxDuration: 3m
+  # - name: dagster
+  #   path: dagster
+  #   namespace: dagster
+  #   syncWave: "2"
+  #   syncOptions:
+  #     - CreateNamespace=true
+  #   retry:
+  #     limit: 5
+  #     backoff:
+  #       duration: 5s
+  #       factor: 2
+  #       maxDuration: 3m
 
   # ---------- Wave 2: Keycloak (Umbrella Helm Chart) ----------
   # Keycloak identity and access management platform.
   # Chart + values in keycloak/ folder.
-  - name: keycloak
-    path: keycloak
-    namespace: keycloak
-    syncWave: "2"
-    syncOptions:
-      - CreateNamespace=true
-    retry:
-      limit: 5
-      backoff:
-        duration: 5s
-        factor: 2
-        maxDuration: 3m
+  # - name: keycloak
+  #   path: keycloak
+  #   namespace: keycloak
+  #   syncWave: "2"
+  #   syncOptions:
+  #     - CreateNamespace=true
+  #   retry:
+  #     limit: 5
+  #     backoff:
+  #       duration: 5s
+  #       factor: 2
+  #       maxDuration: 3m
 
   # ---------- Wave 3: OAuth2 Proxy (Umbrella Helm Chart) ----------
   # Reverse proxy that authenticates Dagster UI access via Keycloak OIDC.
   # Users must be listed in oauth2-proxy/configmap-allowed-emails.yaml.
   # Chart + values in oauth2-proxy/ folder.
-  - name: oauth2-proxy
-    path: oauth2-proxy
-    namespace: dagster
-    syncWave: "3"
-    syncOptions:
-      - CreateNamespace=true
-    retry:
-      limit: 5
-      backoff:
-        duration: 5s
-        factor: 2
-        maxDuration: 3m
+  # - name: oauth2-proxy
+  #   path: oauth2-proxy
+  #   namespace: dagster
+  #   syncWave: "3"
+  #   syncOptions:
+  #     - CreateNamespace=true
+  #   retry:
+  #     limit: 5
+  #     backoff:
+  #       duration: 5s
+  #       factor: 2
+  #       maxDuration: 3m
