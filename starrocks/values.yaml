@@ -36,7 +36,7 @@ kube-starrocks:
 
     # FE (Frontend): query parsing, metadata, planning
     starrocksFESpec:
-      replicas: 1
+      replicas: 2
       image:
         repository: starrocks/fe-ubuntu
         tag: "4.1.0"
