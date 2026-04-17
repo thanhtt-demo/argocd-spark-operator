@@ -5,6 +5,9 @@
 # Values are nested under "kube-starrocks:" because this is an umbrella chart.
 # kube-starrocks itself has two subcharts: operator and starrocks.
 # So the full path is: kube-starrocks.operator.* and kube-starrocks.starrocks.*
+#
+# NOTE: For Minikube (cgroup v1), CPU limits must stay reasonable to avoid
+# "invalid argument" errors on cpu.cfs_quota_us.
 # =============================================================================
 kube-starrocks:
 
@@ -27,7 +30,6 @@ kube-starrocks:
     starrocksCluster:
       enabledBe: true
       enabledCn: false
-      # Set image tag for all components (FE, BE)
       componentValues:
         image:
           tag: "4.1.0"
@@ -43,7 +45,7 @@ kube-starrocks:
           cpu: 500m
           memory: 1Gi
         limits:
-          cpu: "2"
+          cpu: 2
           memory: 4Gi
 
     # BE (Backend): data storage and query execution
@@ -57,5 +59,5 @@ kube-starrocks:
           cpu: 500m
           memory: 1Gi
         limits:
-          cpu: "2"
+          cpu: 2
           memory: 4Gi

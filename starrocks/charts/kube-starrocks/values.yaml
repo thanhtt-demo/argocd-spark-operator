@@ -243,7 +243,7 @@ starrocks:
     #   2. The values in their own spec will replace all the values in this field, not merge.
     componentValues:
       image:
-        tag: "3.5-latest"
+        tag: "4.1.0"
       # hostAliases allows adding entries to /etc/hosts inside the containers.
       hostAliases: []
         # - ip: "127.0.0.1"
@@ -448,12 +448,12 @@ starrocks:
     # resources for FE pod.
     resources:
       requests:
-        cpu: 4
-        memory: 4Gi
+        cpu: 500m
+        memory: 1Gi
       # If you want to remove one resource limit, e.g., cpu, you can set it to cpu: "unlimited".
       limits:
-        cpu: 8
-        memory: 8Gi
+        cpu: 2
+        memory: 4Gi
     # FE storageSpec for persistent metadata.
     # Note: Once set, the following fields will not be allowed to be modified.
     storageSpec:
@@ -1138,12 +1138,12 @@ starrocks:
     # resources for BE pod.
     resources:
       requests:
-        cpu: 4
-        memory: 4Gi
+        cpu: 500m
+        memory: 1Gi
       # If you want to remove one resource limit, e.g., cpu, you can set it to cpu: "unlimited".
       limits:
-        cpu: 8
-        memory: 8Gi
+        cpu: 2
+        memory: 4Gi
     # BE storageSpec for persistent storage.
     # Note: Once set, the following fields will not be allowed to be modified.
     storageSpec:
