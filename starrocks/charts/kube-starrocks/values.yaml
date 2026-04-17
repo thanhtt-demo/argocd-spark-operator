@@ -1138,8 +1138,8 @@ starrocks:
     # resources for BE pod.
     resources:
       requests:
-        cpu: 500m
-        memory: 1Gi
+        cpu: 2
+        memory: 4Gi
       # If you want to remove one resource limit, e.g., cpu, you can set it to cpu: "unlimited".
       limits:
         cpu: 2
