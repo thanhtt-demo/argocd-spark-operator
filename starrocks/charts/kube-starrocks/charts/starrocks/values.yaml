@@ -194,7 +194,7 @@ starrocksCluster:
 # spec to deploy fe.
 starrocksFESpec:
   # number of replicas to deploy for a FE statefulset.
-  replicas: 1
+  replicas: 2
   image:
     # image sliced by "repository:tag"
     repository: starrocks/fe-ubuntu
