@@ -64,6 +64,8 @@ spec:
       kind: "*"
     - group: "sparkoperator.k8s.io"
       kind: "*"
+    - group: "starrocks.com"
+      kind: "*"
     - group: "networking.k8s.io"
       kind: "*"
     - group: "policy"
