@@ -73,19 +73,19 @@ applications:
   # ---------- Wave 2: StarRocks (Umbrella Helm Chart) ----------
   # StarRocks OLAP database: Operator + FE + BE.
   # Chart + values in starrocks/ folder.
-  - name: starrocks
-    path: starrocks
-    namespace: starrocks
-    syncWave: "2"
-    syncOptions:
-      - CreateNamespace=true
-      - ServerSideApply=true
-    retry:
-      limit: 5
-      backoff:
-        duration: 5s
-        factor: 2
-        maxDuration: 3m
+  # - name: starrocks
+  #   path: starrocks
+  #   namespace: starrocks
+  #   syncWave: "2"
+  #   syncOptions:
+  #     - CreateNamespace=true
+  #     - ServerSideApply=true
+  #   retry:
+  #     limit: 5
+  #     backoff:
+  #       duration: 5s
+  #       factor: 2
+  #       maxDuration: 3m
 
   # ---------- Wave 2: Dagster (Umbrella Helm Chart) ----------
   # Dagster orchestration platform: webserver, daemon, user-code, PostgreSQL.
