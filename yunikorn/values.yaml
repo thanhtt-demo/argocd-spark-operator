@@ -13,6 +13,17 @@
 # Edit values here → push to Git → ArgoCD auto-syncs.
 # =============================================================================
 yunikorn:
+  # === SCHEDULER RESOURCES (top-level in chart) ===
+  # Override chart default (cpu:4, memory:2Gi) to avoid cgroup v1 errors.
+  # On EKS production with cgroup v2, restore to cpu:4, memory:2Gi.
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
   # === ADMISSION CONTROLLER ===
   # Routes all scheduling traffic to YuniKorn instead of default kube-scheduler.
   # When enabled, ALL pods in the cluster use YuniKorn (recommended for POC).
@@ -30,21 +41,6 @@ yunikorn:
       #   cpu: 500m
       #   memory: 512Mi
 
-  # === SCHEDULER ===
-  # Resource limits reduced for Minikube compatibility.
-  # On EKS production, increase these values.
-  scheduler:
-    replicaCount: 1
-    resources:
-      requests:
-        cpu: 100m
-        memory: 256Mi
-      # Limits removed to avoid cgroup quota errors on low-resource nodes.
-      # Uncomment for production:
-      # limits:
-      #   cpu: "1"
-      #   memory: 1Gi
-
   # === WEB UI ===
   # YuniKorn web interface for monitoring queues, apps, and nodes
   web:
@@ -52,9 +48,6 @@ yunikorn:
       requests:
         cpu: 50m
         memory: 64Mi
-      # limits:
-      #   cpu: 200m
-      #   memory: 256Mi
 
   # === QUEUE CONFIGURATION ===
   # This is the core configuration that solves the EKS pod scatter problem.
