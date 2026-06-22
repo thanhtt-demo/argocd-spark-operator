@@ -52,19 +52,19 @@ applications:
   # # ---------- Wave 2: Spark Operator (Umbrella Helm Chart) ----------
   # # Installs the Kubeflow Spark Operator.
   # # Chart + values in spark-operator/ folder.
-  # - name: spark-operator
-  #   path: spark-operator
-  #   namespace: spark-operator
-  #   syncWave: "2"
-  #   syncOptions:
-  #     - CreateNamespace=true
-  #     - ServerSideApply=true
-  #   retry:
-  #     limit: 5
-  #     backoff:
-  #       duration: 5s
-  #       factor: 2
-  #       maxDuration: 3m
+  - name: spark-operator
+    path: spark-operator
+    namespace: spark-operator
+    syncWave: "2"
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
 
   # # ---------- Wave 3: RBAC ----------
   # # ServiceAccount, Role, RoleBinding for Spark driver pods.
