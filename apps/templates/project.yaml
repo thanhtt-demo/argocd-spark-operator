@@ -21,6 +21,7 @@ spec:
     - "registry-1.docker.io/cloudpirates/*"
     - "https://oauth2-proxy.github.io/manifests"
     - "https://starrocks.github.io/starrocks-kubernetes-operator"
+    - "https://apache.github.io/yunikorn-release"
 
   # === DESTINATIONS ===
   destinations:
@@ -34,6 +35,8 @@ spec:
       namespace: keycloak
     - server: {{ .Values.config.destination.server }}
       namespace: starrocks
+    - server: {{ .Values.config.destination.server }}
+      namespace: yunikorn
     - server: {{ .Values.config.destination.server }}
       namespace: ""                   # Allow cluster-scoped resources (Namespace, CRDs)
 

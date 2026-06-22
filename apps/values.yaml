@@ -25,11 +25,29 @@ config:
 applications:
 
   # ---------- Wave 1: Namespaces ----------
-  # Creates spark-operator and spark-apps namespaces.
+  # Creates spark-operator, spark-apps, yunikorn namespaces.
   # Must run first because all subsequent apps require these namespaces.
   - name: spark-namespaces
     path: namespaces
     syncWave: "1"
+
+  # ---------- Wave 2: YuniKorn Scheduler (Umbrella Helm Chart) ----------
+  # Apache YuniKorn: bin-packing + gang scheduling for Spark on EKS.
+  # Solves pod scatter problem by packing executors onto fewest nodes.
+  # Chart + values in yunikorn/ folder.
+  - name: yunikorn
+    path: yunikorn
+    namespace: yunikorn
+    syncWave: "2"
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
 
   # # ---------- Wave 2: Spark Operator (Umbrella Helm Chart) ----------
   # # Installs the Kubeflow Spark Operator.
@@ -73,19 +91,19 @@ applications:
   # ---------- Wave 2: StarRocks (Umbrella Helm Chart) ----------
   # StarRocks OLAP database: Operator + FE + BE.
   # Chart + values in starrocks/ folder.
-  - name: starrocks
-    path: starrocks
-    namespace: starrocks
-    syncWave: "2"
-    syncOptions:
-      - CreateNamespace=true
-      - ServerSideApply=true
-    retry:
-      limit: 5
-      backoff:
-        duration: 5s
-        factor: 2
-        maxDuration: 3m
+  # - name: starrocks
+  #   path: starrocks
+  #   namespace: starrocks
+  #   syncWave: "2"
+  #   syncOptions:
+  #     - CreateNamespace=true
+  #     - ServerSideApply=true
+  #   retry:
+  #     limit: 5
+  #     backoff:
+  #       duration: 5s
+  #       factor: 2
+  #       maxDuration: 3m
 
   # ---------- Wave 2: Dagster (Umbrella Helm Chart) ----------
   # Dagster orchestration platform: webserver, daemon, user-code, PostgreSQL.

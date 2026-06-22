@@ -1,0 +1,132 @@
+# =============================================================================
+# SparkApplication: Spark Pi with YuniKorn (POC - Bin-packing + Gang Scheduling)
+#
+# This is a variant of spark-pi-batch that integrates with Apache YuniKorn.
+# Purpose: Demonstrate bin-packing and gang scheduling to reduce node claim.
+#
+# Key YuniKorn features used:
+#   1. schedulerName: yunikorn → routes pods to YuniKorn instead of kube-scheduler
+#   2. yunikorn.apache.org/app-id → groups driver + executors as one application
+#   3. yunikorn.apache.org/queue → assigns to spark-batch queue
+#   4. yunikorn.apache.org/task-group-name → enables gang scheduling
+#   5. yunikorn.apache.org/task-groups → defines resource requirements for gang
+#
+# Gang scheduling effect:
+#   - YuniKorn will NOT start the driver until resources for ALL executors
+#     are available → prevents deadlock and partial scheduling
+#   - Combined with bin-packing, all pods land on fewest nodes possible
+#
+# How to verify bin-packing:
+#   kubectl get pods -n spark-apps -o wide   # Check NODE column
+#   # All pods should be on 1-2 nodes instead of spread across many
+#
+# Compare with spark-pi-batch.yaml (default scheduler) to see the difference.
+# =============================================================================
+apiVersion: sparkoperator.k8s.io/v1beta2
+kind: SparkApplication
+metadata:
+  name: spark-pi-yunikorn
+  namespace: spark-apps
+  labels:
+    app.kubernetes.io/part-of: spark-platform
+    app.kubernetes.io/component: batch
+    scheduler: yunikorn
+spec:
+  type: Scala
+  mode: cluster
+  image: docker.io/library/spark:4.0.1
+  imagePullPolicy: IfNotPresent
+  mainClass: org.apache.spark.examples.SparkPi
+  mainApplicationFile: local:///opt/spark/examples/jars/spark-examples.jar
+  arguments:
+    - "10000"
+  sparkVersion: "4.0.1"
+
+  restartPolicy:
+    type: OnFailure
+    onFailureRetries: 3
+    onFailureRetryInterval: 10
+    onSubmissionFailureRetries: 5
+    onSubmissionFailureRetryInterval: 20
+
+  # === DRIVER POD ===
+  driver:
+    cores: 1
+    coreLimit: "1200m"
+    memory: "512m"
+    labels:
+      app: spark-pi-yunikorn
+      version: "4.0.1"
+      # YuniKorn labels for app-aware scheduling
+      queue: root.spark-batch
+    annotations:
+      # YuniKorn: Application identity (groups driver + executors together)
+      yunikorn.apache.org/app-id: "spark-pi-yunikorn-{{`{{.Run.ID}}`}}"
+      # YuniKorn: Queue assignment for resource quota
+      yunikorn.apache.org/queue: root.spark-batch
+      # YuniKorn: Gang scheduling - task group for the driver
+      yunikorn.apache.org/task-group-name: "spark-driver"
+      # YuniKorn: Gang scheduling - define ALL task groups for this application
+      # This tells YuniKorn the total resource footprint before scheduling starts.
+      # Format: JSON array of task groups with name, minMember, minResource
+      yunikorn.apache.org/task-groups: |
+        [{
+          "name": "spark-driver",
+          "minMember": 1,
+          "minResource": {
+            "cpu": "1",
+            "memory": "512Mi"
+          }
+        },
+        {
+          "name": "spark-executor",
+          "minMember": 2,
+          "minResource": {
+            "cpu": "1",
+            "memory": "512Mi"
+          }
+        }]
+      # Gang scheduling style:
+      #   Hard = job waits indefinitely until ALL resources are available
+      #   Soft = job starts with partial resources after timeout
+      yunikorn.apache.org/schedulingPolicyParameters: "gangSchedulingStyle=Hard"
+    serviceAccount: spark-operator-spark
+    # Route to YuniKorn scheduler
+    schedulerName: yunikorn
+    securityContext:
+      capabilities:
+        drop:
+          - ALL
+      runAsUser: 185
+      runAsGroup: 185
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      seccompProfile:
+        type: RuntimeDefault
+
+  # === EXECUTOR PODS ===
+  executor:
+    cores: 1
+    instances: 2
+    memory: "512m"
+    labels:
+      app: spark-pi-yunikorn
+      version: "4.0.1"
+      queue: root.spark-batch
+    annotations:
+      yunikorn.apache.org/app-id: "spark-pi-yunikorn-{{`{{.Run.ID}}`}}"
+      yunikorn.apache.org/queue: root.spark-batch
+      yunikorn.apache.org/task-group-name: "spark-executor"
+      yunikorn.apache.org/schedulingPolicyParameters: "gangSchedulingStyle=Hard"
+    # Route to YuniKorn scheduler
+    schedulerName: yunikorn
+    securityContext:
+      capabilities:
+        drop:
+          - ALL
+      runAsUser: 185
+      runAsGroup: 185
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      seccompProfile:
+        type: RuntimeDefault

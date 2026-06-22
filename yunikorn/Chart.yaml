@@ -1,0 +1,25 @@
+# =============================================================================
+# Umbrella Chart: Apache YuniKorn
+# Wraps the official YuniKorn Helm chart as a dependency.
+# ArgoCD points to this folder → Helm resolves the dependency automatically.
+# Values in values.yaml are passed to the yunikorn subchart.
+#
+# YuniKorn provides:
+#   - Bin-packing (MostAllocated node sorting) → reduces node claim on EKS
+#   - Gang scheduling → all Spark pods start together or not at all
+#   - App-aware scheduling → co-locates driver + executors
+#   - Hierarchical queue management → resource quota per workload type
+#
+# Helm repo: https://apache.github.io/yunikorn-release
+# Docs: https://yunikorn.apache.org/docs/
+# =============================================================================
+apiVersion: v2
+name: yunikorn-umbrella
+description: Umbrella chart for Apache YuniKorn batch scheduler (bin-packing + gang scheduling for Spark)
+type: application
+version: 0.1.0
+
+dependencies:
+  - name: yunikorn
+    version: "1.8.0"
+    repository: https://apache.github.io/yunikorn-release

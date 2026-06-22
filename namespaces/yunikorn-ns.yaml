@@ -1,0 +1,13 @@
+# =============================================================================
+# Namespace: yunikorn
+# Dedicated namespace for the Apache YuniKorn scheduler components.
+# Contains: scheduler, admission-controller, web-server.
+# Managed by ArgoCD (sync wave 1 - created first).
+# =============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: yunikorn
+  labels:
+    app.kubernetes.io/part-of: spark-platform
+    app.kubernetes.io/managed-by: argocd

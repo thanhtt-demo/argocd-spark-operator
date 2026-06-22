@@ -1,0 +1,123 @@
+# =============================================================================
+# SparkApplication: Spark Pi Stress Test with YuniKorn
+#
+# PURPOSE: POC stress test to demonstrate bin-packing savings on EKS.
+#
+# This job uses 5 executors with higher resources to simulate a real workload.
+# Run this alongside the default-scheduler version (spark-pi-batch) and compare:
+#
+#   1. Number of nodes used (kubectl get nodes)
+#   2. Pod distribution (kubectl get pods -n spark-apps -o wide)
+#   3. Node utilization (eks-node-viewer or kubectl top nodes)
+#
+# Expected behavior with YuniKorn bin-packing:
+#   - 5 executors + 1 driver = 6 pods packed onto 1-2 nodes (instead of 4-6)
+#   - Karpenter/CA can scale-in unused nodes faster
+#   - Cost reduction: ~13-30% depending on workload mix (based on Salesforce study)
+#
+# To run A/B comparison:
+#   1. Deploy this job → observe node count with eks-node-viewer
+#   2. Delete this job → deploy spark-pi-batch (default scheduler) with same resources
+#   3. Compare node footprint
+# =============================================================================
+apiVersion: sparkoperator.k8s.io/v1beta2
+kind: SparkApplication
+metadata:
+  name: spark-pi-yunikorn-stress
+  namespace: spark-apps
+  labels:
+    app.kubernetes.io/part-of: spark-platform
+    app.kubernetes.io/component: batch
+    scheduler: yunikorn
+    test: binpacking-poc
+spec:
+  type: Scala
+  mode: cluster
+  image: docker.io/library/spark:4.0.1
+  imagePullPolicy: IfNotPresent
+  mainClass: org.apache.spark.examples.SparkPi
+  mainApplicationFile: local:///opt/spark/examples/jars/spark-examples.jar
+  arguments:
+    - "100000"                        # More partitions = longer runtime for observation
+  sparkVersion: "4.0.1"
+
+  restartPolicy:
+    type: OnFailure
+    onFailureRetries: 2
+    onFailureRetryInterval: 10
+    onSubmissionFailureRetries: 3
+    onSubmissionFailureRetryInterval: 20
+
+  # === DRIVER POD ===
+  driver:
+    cores: 1
+    coreLimit: "1500m"
+    memory: "1g"
+    labels:
+      app: spark-pi-yunikorn-stress
+      version: "4.0.1"
+      queue: root.spark-batch
+    annotations:
+      yunikorn.apache.org/app-id: "spark-pi-stress-{{`{{.Run.ID}}`}}"
+      yunikorn.apache.org/queue: root.spark-batch
+      yunikorn.apache.org/task-group-name: "spark-driver"
+      yunikorn.apache.org/task-groups: |
+        [{
+          "name": "spark-driver",
+          "minMember": 1,
+          "minResource": {
+            "cpu": "1",
+            "memory": "1Gi"
+          }
+        },
+        {
+          "name": "spark-executor",
+          "minMember": 5,
+          "minResource": {
+            "cpu": "2",
+            "memory": "2Gi"
+          }
+        }]
+      yunikorn.apache.org/schedulingPolicyParameters: "gangSchedulingStyle=Hard"
+    serviceAccount: spark-operator-spark
+    schedulerName: yunikorn
+    securityContext:
+      capabilities:
+        drop:
+          - ALL
+      runAsUser: 185
+      runAsGroup: 185
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      seccompProfile:
+        type: RuntimeDefault
+
+  # === EXECUTOR PODS (5 instances, 2 cores each) ===
+  # Total executor footprint: 10 CPU + 10Gi memory
+  # With bin-packing: should fit on 2-3 nodes (e.g., m5.2xlarge = 8 CPU, 32Gi)
+  # Without bin-packing: could spread across 5+ nodes
+  executor:
+    cores: 2
+    coreLimit: "2500m"
+    instances: 5
+    memory: "2g"
+    labels:
+      app: spark-pi-yunikorn-stress
+      version: "4.0.1"
+      queue: root.spark-batch
+    annotations:
+      yunikorn.apache.org/app-id: "spark-pi-stress-{{`{{.Run.ID}}`}}"
+      yunikorn.apache.org/queue: root.spark-batch
+      yunikorn.apache.org/task-group-name: "spark-executor"
+      yunikorn.apache.org/schedulingPolicyParameters: "gangSchedulingStyle=Hard"
+    schedulerName: yunikorn
+    securityContext:
+      capabilities:
+        drop:
+          - ALL
+      runAsUser: 185
+      runAsGroup: 185
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      seccompProfile:
+        type: RuntimeDefault
