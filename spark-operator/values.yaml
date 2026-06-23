@@ -22,6 +22,7 @@ spark-operator:
   spark:
     jobNamespaces:
       - spark-apps
+      - spark-apps-default
 
   # Webhook: mutating/validating admission webhook for pod customization
   webhook:

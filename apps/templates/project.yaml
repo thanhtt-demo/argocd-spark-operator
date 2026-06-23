@@ -30,6 +30,8 @@ spec:
     - server: {{ .Values.config.destination.server }}
       namespace: spark-apps
     - server: {{ .Values.config.destination.server }}
+      namespace: spark-apps-default
+    - server: {{ .Values.config.destination.server }}
       namespace: dagster
     - server: {{ .Values.config.destination.server }}
       namespace: keycloak

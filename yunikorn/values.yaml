@@ -54,6 +54,12 @@ yunikorn:
   # Reference: https://yunikorn.apache.org/docs/user_guide/queue_config
   # NOTE: Chart 1.8.0 uses "yunikornDefaults" key with "queues.yaml" sub-key.
   yunikornDefaults:
+    # Admission controller filtering:
+    # - spark-apps-default namespace is BYPASSED → uses default kube-scheduler
+    # - spark-apps namespace uses YuniKorn scheduler
+    # This allows fair A/B comparison on the same cluster.
+    admissionController.filtering.bypassNamespaces: "^kube-system$,^spark-apps-default$"
+    admissionController.filtering.processNamespaces: ""
     queues.yaml: |
       partitions:
         - name: default

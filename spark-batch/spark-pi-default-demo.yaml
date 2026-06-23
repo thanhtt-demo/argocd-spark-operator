@@ -1,0 +1,79 @@
+# =============================================================================
+# SparkApplication: Spark Pi - DEFAULT SCHEDULER DEMO (Control)
+#
+# PURPOSE: Baseline comparison for bin-packing demo.
+# IDENTICAL resource spec to spark-pi-yunikorn-demo.yaml — only scheduler differs.
+#
+# Resource footprint:
+#   Driver:   1 core × 1 = 1 CPU
+#   Executor: 1.5 cores × 6 = 9 CPU
+#   Total: 10 CPU → 83% of 12-CPU node (if packed)
+#
+# Expected: pods SPREAD across 3 nodes (~33% each) instead of packed onto 1.
+# =============================================================================
+apiVersion: sparkoperator.k8s.io/v1beta2
+kind: SparkApplication
+metadata:
+  name: spark-pi-default-demo
+  namespace: spark-apps-default
+  labels:
+    app.kubernetes.io/part-of: spark-platform
+    app.kubernetes.io/component: batch
+    test: binpacking-demo
+    scheduler: default
+spec:
+  type: Scala
+  mode: cluster
+  image: docker.io/library/spark:4.0.1
+  imagePullPolicy: IfNotPresent
+  mainClass: org.apache.spark.examples.SparkPi
+  mainApplicationFile: local:///opt/spark/examples/jars/spark-examples.jar
+  arguments:
+    - "500000"
+  sparkVersion: "4.0.1"
+
+  restartPolicy:
+    type: OnFailure
+    onFailureRetries: 2
+    onFailureRetryInterval: 10
+    onSubmissionFailureRetries: 3
+    onSubmissionFailureRetryInterval: 20
+
+  # === DRIVER POD (1 CPU) ===
+  driver:
+    cores: 1
+    coreLimit: "1200m"
+    memory: "1g"
+    labels:
+      app: spark-pi-default-demo
+      version: "4.0.1"
+    serviceAccount: spark-operator-spark
+    securityContext:
+      capabilities:
+        drop: ["ALL"]
+      runAsUser: 185
+      runAsGroup: 185
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      seccompProfile:
+        type: RuntimeDefault
+
+  # === EXECUTOR PODS (6 × 1.5 CPU = 9 CPU) ===
+  executor:
+    cores: 1
+    coreRequest: "1500m"
+    coreLimit: "1500m"
+    instances: 6
+    memory: "1g"
+    labels:
+      app: spark-pi-default-demo
+      version: "4.0.1"
+    securityContext:
+      capabilities:
+        drop: ["ALL"]
+      runAsUser: 185
+      runAsGroup: 185
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      seccompProfile:
+        type: RuntimeDefault

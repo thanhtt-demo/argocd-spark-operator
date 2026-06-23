@@ -113,7 +113,8 @@ choco install k9s
 minikube start --driver=docker
 
 # for test multil nodes
-minikube start --nodes=3 --cpus=4 --memory=16384 --cni=bridge --driver=docker
+minikube start --nodes=3 --cpus=4 --memory=16384 --cni=calico --driver=docker
+
 ```
 
 ### Create kubectl alias

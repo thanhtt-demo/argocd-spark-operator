@@ -1,0 +1,15 @@
+# =============================================================================
+# Namespace: spark-apps-default
+# Dedicated namespace for Spark jobs using DEFAULT kube-scheduler.
+# YuniKorn admission controller BYPASSES this namespace (configured in
+# yunikornDefaults.admissionController.filtering.bypassNamespaces).
+# Used for A/B testing: compare default scheduler vs YuniKorn bin-packing.
+# =============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: spark-apps-default
+  labels:
+    app.kubernetes.io/part-of: spark-platform
+    app.kubernetes.io/managed-by: argocd
+    scheduler: default

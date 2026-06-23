@@ -1,0 +1,108 @@
+# =============================================================================
+# SparkApplication: Spark Pi - YuniKorn Bin-packing DEMO
+#
+# PURPOSE: Demonstrate ~80% node utilization with bin-packing.
+# Target: pack onto 1 node with ~10/12 CPU allocated (83%)
+#
+# Resource footprint:
+#   Driver:   1 core × 1 = 1 CPU
+#   Executor: 1.5 cores × 6 = 9 CPU
+#   Total: 10 CPU → 83% of 12-CPU node
+# =============================================================================
+apiVersion: sparkoperator.k8s.io/v1beta2
+kind: SparkApplication
+metadata:
+  name: spark-pi-yunikorn-demo
+  namespace: spark-apps
+  labels:
+    app.kubernetes.io/part-of: spark-platform
+    app.kubernetes.io/component: batch
+    test: binpacking-demo
+    scheduler: yunikorn
+spec:
+  type: Scala
+  mode: cluster
+  image: docker.io/library/spark:4.0.1
+  imagePullPolicy: IfNotPresent
+  mainClass: org.apache.spark.examples.SparkPi
+  mainApplicationFile: local:///opt/spark/examples/jars/spark-examples.jar
+  arguments:
+    - "500000"                        # Many partitions = longer runtime for demo
+  sparkVersion: "4.0.1"
+
+  restartPolicy:
+    type: OnFailure
+    onFailureRetries: 2
+    onFailureRetryInterval: 10
+    onSubmissionFailureRetries: 3
+    onSubmissionFailureRetryInterval: 20
+
+  # === DRIVER POD (1 CPU) ===
+  driver:
+    cores: 1
+    coreLimit: "1200m"
+    memory: "1g"
+    labels:
+      app: spark-pi-yunikorn-demo
+      version: "4.0.1"
+      queue: root.spark-batch
+    annotations:
+      yunikorn.apache.org/app-id: "spark-pi-demo"
+      yunikorn.apache.org/queue: root.spark-batch
+      yunikorn.apache.org/task-group-name: "spark-driver"
+      yunikorn.apache.org/task-groups: |
+        [{
+          "name": "spark-driver",
+          "minMember": 1,
+          "minResource": {
+            "cpu": "1",
+            "memory": "1Gi"
+          }
+        },
+        {
+          "name": "spark-executor",
+          "minMember": 6,
+          "minResource": {
+            "cpu": "1500m",
+            "memory": "1Gi"
+          }
+        }]
+      yunikorn.apache.org/schedulingPolicyParameters: "gangSchedulingStyle=Hard"
+    serviceAccount: spark-operator-spark
+    schedulerName: yunikorn
+    securityContext:
+      capabilities:
+        drop: ["ALL"]
+      runAsUser: 185
+      runAsGroup: 185
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      seccompProfile:
+        type: RuntimeDefault
+
+  # === EXECUTOR PODS (6 × 1.5 CPU = 9 CPU) ===
+  executor:
+    cores: 1
+    coreRequest: "1500m"
+    coreLimit: "1500m"
+    instances: 6
+    memory: "1g"
+    labels:
+      app: spark-pi-yunikorn-demo
+      version: "4.0.1"
+      queue: root.spark-batch
+    annotations:
+      yunikorn.apache.org/app-id: "spark-pi-demo"
+      yunikorn.apache.org/queue: root.spark-batch
+      yunikorn.apache.org/task-group-name: "spark-executor"
+      yunikorn.apache.org/schedulingPolicyParameters: "gangSchedulingStyle=Hard"
+    schedulerName: yunikorn
+    securityContext:
+      capabilities:
+        drop: ["ALL"]
+      runAsUser: 185
+      runAsGroup: 185
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      seccompProfile:
+        type: RuntimeDefault
