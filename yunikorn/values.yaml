@@ -52,81 +52,64 @@ yunikorn:
   # === QUEUE CONFIGURATION ===
   # This is the core configuration that solves the EKS pod scatter problem.
   # Reference: https://yunikorn.apache.org/docs/user_guide/queue_config
-  queues: |
-    partitions:
-      - name: default
-        # =====================================================================
-        # NODE SORT POLICY: binpacking
-        # THIS IS THE KEY SETTING that solves the pod scatter problem.
-        #
-        # Default kube-scheduler uses "LeastAllocated" (spread pods evenly).
-        # YuniKorn "binpacking" uses "MostAllocated" (pack pods tightly).
-        #
-        # Effect: Spark executors fill up existing nodes before triggering new
-        # node provisioning → fewer nodes claimed → lower EKS cost.
-        #
-        # resourceweights: balance between memory and CPU when scoring nodes.
-        # Equal weights (1:1) means both resources matter equally for packing.
-        # =====================================================================
-        nodesortpolicy:
-          type: binpacking
-          resourceweights:
-            memory: 1
-            vcore: 1
+  # NOTE: Chart 1.8.0 uses "yunikornDefaults" key with "queues.yaml" sub-key.
+  yunikornDefaults:
+    queues.yaml: |
+      partitions:
+        - name: default
+          # =====================================================================
+          # NODE SORT POLICY: binpacking
+          # THIS IS THE KEY SETTING that solves the pod scatter problem.
+          #
+          # Default kube-scheduler uses "LeastAllocated" (spread pods evenly).
+          # YuniKorn "binpacking" uses "MostAllocated" (pack pods tightly).
+          #
+          # Effect: Spark executors fill up existing nodes before triggering new
+          # node provisioning → fewer nodes claimed → lower EKS cost.
+          # =====================================================================
+          nodesortpolicy:
+            type: binpacking
+            resourceweights:
+              memory: 1
+              vcore: 1
 
-        # Placement rules: use the queue specified in pod annotation/label.
-        # If not specified, place in root.default queue.
-        placementrules:
-          - name: provided
-            create: true
-          - name: tag
-            value: namespace
-            create: true
+          placementrules:
+            - name: provided
+              create: true
+            - name: tag
+              value: namespace
+              create: true
 
-        queues:
-          - name: root
-            submitacl: '*'
-            queues:
-              # ---------------------------------------------------------
-              # Queue: spark-batch
-              # For batch SparkApplications (spark-pi, word-count, etc.)
-              # Gang scheduling ensures all executor pods start together.
-              # ---------------------------------------------------------
-              - name: spark-batch
-                properties:
-                  application.sort.policy: fifo    # First-in-first-out
-                resources:
-                  guaranteed:
-                    memory: 4Gi
-                    vcore: 4
-                  max:
-                    memory: 32Gi
-                    vcore: 16
+          queues:
+            - name: root
+              submitacl: '*'
+              queues:
+                - name: spark-batch
+                  properties:
+                    application.sort.policy: fifo
+                  resources:
+                    guaranteed:
+                      memory: 4Gi
+                      vcore: 4
+                    max:
+                      memory: 32Gi
+                      vcore: 16
 
-              # ---------------------------------------------------------
-              # Queue: spark-streaming
-              # For long-running streaming SparkApplications.
-              # Higher guaranteed resources since streaming never finishes.
-              # ---------------------------------------------------------
-              - name: spark-streaming
-                properties:
-                  application.sort.policy: fair    # Fair share between apps
-                resources:
-                  guaranteed:
-                    memory: 4Gi
-                    vcore: 4
-                  max:
-                    memory: 16Gi
-                    vcore: 8
+                - name: spark-streaming
+                  properties:
+                    application.sort.policy: fair
+                  resources:
+                    guaranteed:
+                      memory: 4Gi
+                      vcore: 4
+                    max:
+                      memory: 16Gi
+                      vcore: 8
 
-              # ---------------------------------------------------------
-              # Queue: default
-              # Catch-all for workloads without explicit queue assignment.
-              # ---------------------------------------------------------
-              - name: default
-                properties:
-                  application.sort.policy: fifo
-                resources:
-                  max:
-                    memory: 16Gi
-                    vcore: 8
+                - name: default
+                  properties:
+                    application.sort.policy: fifo
+                  resources:
+                    max:
+                      memory: 16Gi
+                      vcore: 8
