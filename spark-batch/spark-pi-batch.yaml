@@ -65,7 +65,7 @@ spec:
   # Executors perform the actual Pi computation in parallel
   executor:
     cores: 1
-    instances: 2                      # 2 executor pods for parallel processing
+    instances: 5                      # 2 executor pods for parallel processing
     memory: "512m"                    # 512MB memory per executor
     labels:
       app: spark-pi-batch
