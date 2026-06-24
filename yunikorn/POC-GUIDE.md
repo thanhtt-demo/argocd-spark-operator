@@ -1,86 +1,109 @@
-# YuniKorn POC Guide: Bin-packing for Spark on EKS
+# YuniKorn POC Guide: Bin-packing for Spark on Kubernetes
 
-## Mục tiêu POC
+## Objective
 
-Chứng minh rằng Apache YuniKorn giảm đáng kể số lượng node được claim trên EKS
-khi chạy Spark workloads, so với default kube-scheduler.
+Prove that Apache YuniKorn reduces the number of nodes claimed on EKS when running
+Spark workloads, compared to the default kube-scheduler.
 
-## Vấn đề hiện tại
+## Problem Statement
 
-Default kube-scheduler sử dụng `LeastAllocated` scoring → dàn đều pod vào tất cả
-nodes có sẵn → Karpenter/CA provision thêm node không cần thiết → chi phí tăng.
+The default kube-scheduler uses `LeastAllocated` scoring — it spreads pods evenly
+across all available nodes. For bursty Spark workloads this causes:
 
-## Giải pháp
+1. **Pod scatter**: Executors land on many nodes with low utilization each
+2. **Node fragmentation**: After jobs finish, nodes remain partially occupied
+3. **Cost increase**: Karpenter/CA cannot scale-in fragmented nodes → you pay for idle capacity
 
-YuniKorn với `nodesortpolicy: binpacking` sử dụng `MostAllocated` → pack pod chặt
-vào ít node nhất → node trống được scale-in → chi phí giảm.
+## Solution
+
+YuniKorn with `nodesortpolicy: binpacking` uses `MostAllocated` scoring — it packs
+pods tightly onto the fewest nodes possible. Combined with gang scheduling, Spark
+jobs start atomically and land on minimal nodes.
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Namespace: spark-apps              (YuniKorn scheduler) │
+│  → Pods bin-packed onto fewest nodes                     │
+│  → Gang scheduling: all-or-nothing start                 │
+├─────────────────────────────────────────────────────────┤
+│  Namespace: spark-apps-default      (kube-scheduler)     │
+│  → YuniKorn admission controller BYPASSES this namespace │
+│  → Pods use default LeastAllocated (spread)              │
+└─────────────────────────────────────────────────────────┘
+```
+
+This separation allows a fair A/B comparison on the same cluster without
+disabling any components.
 
 ---
 
 ## Prerequisites
 
 ```bash
-# Minikube multi-node cluster (3 nodes, 12 CPU mỗi node)
+# Minikube multi-node cluster (3 nodes, 12 CPU each)
 minikube start --nodes=3 --cpus=4 --memory=16384 --cni=calico --driver=docker
 
-# Verify nodes Ready
+# Verify all nodes Ready
 kubectl get nodes
 
-# ArgoCD installed
+# Install ArgoCD
 kubectl create namespace argocd
-kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml --server-side=true --force-conflicts
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml \
+  --server-side=true --force-conflicts
 kubectl wait --for=condition=available deployment/argocd-server -n argocd --timeout=300s
 
-# Metrics server (for kubectl top)
+# Enable metrics server
 minikube addons enable metrics-server
+
+# Bootstrap platform (YuniKorn + Spark Operator + namespaces)
+kubectl apply -f app-of-apps.yaml
 ```
 
-## Bước 1: Deploy YuniKorn + Spark Operator
+## Verify YuniKorn Deployment
 
 ```bash
-# Bootstrap toàn bộ platform via ArgoCD
-kubectl apply -f app-of-apps.yaml
-
-# Verify YuniKorn running
+# Check pods
 kubectl get pods -n yunikorn
-# Expected: scheduler (2/2), admission-controller (1/1)
+# Expected: scheduler (2/2 Running), admission-controller (1/1 Running)
 
-# Verify bin-packing config loaded
-kubectl get configmap yunikorn-defaults -n yunikorn -o yaml
-# Expected: queues.yaml section with nodesortpolicy: binpacking
+# Verify bin-packing config loaded (DATA must be > 0)
+kubectl get configmap yunikorn-defaults -n yunikorn
+kubectl get configmap yunikorn-defaults -n yunikorn -o yaml | grep nodesortpolicy
 ```
 
-## Bước 2: A/B Test — Default Scheduler vs YuniKorn
+---
 
-### Test setup
+## A/B Test: Default Scheduler vs YuniKorn
 
-Cả 2 job **cùng resource spec**, chỉ khác scheduler:
+### Test Configuration
 
-| Config | Giá trị |
-|--------|---------|
+Both jobs use **identical resource specs** — only the scheduler differs:
+
+| Config | Value |
+|--------|-------|
 | Driver | 1 core, 1g memory |
 | Executors | 6 instances × 1.5 cores, 1g memory |
 | Total footprint | 10 CPU, 7g memory |
-| Target utilization | ~83% of 12-CPU node |
+| Target utilization | ~83% of a 12-CPU node |
 
 ### Test A: Default Scheduler (LeastAllocated — scatter)
 
 ```bash
-# Xóa jobs cũ
-kubectl delete sparkapplication --all -n spark-apps --ignore-not-found
-
-# Deploy default scheduler job
 kubectl apply -f spark-batch/spark-pi-default-demo.yaml
 
-# Đợi pods Running (~30s)
-kubectl get pods -n spark-apps -o wide -w
+# Wait for pods to be Running (~30s)
+kubectl get pods -n spark-apps-default -o wide -w
 
-# Capture kết quả
-kubectl get pods -n spark-apps -o wide
+# Capture results
+kubectl get pods -n spark-apps-default -o wide
 kubectl top nodes
 ```
 
-**Kết quả mong đợi:**
+**Expected result — pods scattered across all 3 nodes:**
 
 ```
 NAME           CPU(cores)   CPU%   MEMORY(bytes)   MEMORY%
@@ -89,26 +112,33 @@ minikube-m02   ~3500m       ~29%   ~3Gi            ~2%
 minikube-m03   ~3500m       ~29%   ~3Gi            ~2%
 ```
 
-Pods dàn đều 3 nodes → tất cả nodes đều bị claim → trên EKS trả tiền cả 3.
+```
+NAME                               NODE
+spark-pi-...-exec-1                minikube
+spark-pi-...-exec-2                minikube-m02
+spark-pi-...-exec-3                minikube-m03
+spark-pi-...-exec-4                minikube
+spark-pi-...-exec-5                minikube-m02
+spark-pi-...-exec-6                minikube-m03
+spark-pi-default-demo-driver       minikube
+```
+
+All 3 nodes are occupied → on EKS you pay for all 3.
 
 ### Test B: YuniKorn Scheduler (binpacking — pack)
 
 ```bash
-# Xóa job default
-kubectl delete sparkapplication --all -n spark-apps --ignore-not-found
-
-# Deploy YuniKorn job
 kubectl apply -f spark-batch/spark-pi-yunikorn-demo.yaml
 
-# Đợi pods Running (~30s)
+# Wait for pods to be Running (~30s)
 kubectl get pods -n spark-apps -o wide -w
 
-# Capture kết quả
+# Capture results
 kubectl get pods -n spark-apps -o wide
 kubectl top nodes
 ```
 
-**Kết quả mong đợi:**
+**Expected result — all pods packed onto 1 node:**
 
 ```
 NAME           CPU(cores)   CPU%   MEMORY(bytes)   MEMORY%
@@ -117,37 +147,88 @@ minikube-m02   ~100m        ~0%    ~1.4Gi          ~1%
 minikube-m03   ~100m        ~0%    ~1.4Gi          ~1%
 ```
 
-Tất cả 7 pods pack trên 1 node → 2 nodes trống → trên EKS Karpenter scale-in → trả tiền 1 node.
+```
+NAME                                NODE
+spark-pi-...-exec-1                 minikube
+spark-pi-...-exec-2                 minikube
+spark-pi-...-exec-3                 minikube
+spark-pi-...-exec-4                 minikube
+spark-pi-...-exec-5                 minikube
+spark-pi-...-exec-6                 minikube
+spark-pi-yunikorn-demo-driver       minikube
+```
+
+All 7 pods on 1 node → 2 nodes are empty → on EKS Karpenter scales them in → you pay for 1 node.
+
+### Side-by-side Comparison (run both simultaneously)
+
+```bash
+# Both jobs can run at the same time on different namespaces
+kubectl apply -f spark-batch/spark-pi-default-demo.yaml
+kubectl apply -f spark-batch/spark-pi-yunikorn-demo.yaml
+
+# Compare distribution
+kubectl get pods -n spark-apps-default -o wide
+kubectl get pods -n spark-apps -o wide
+kubectl top nodes
+```
 
 ---
 
-## Bước 3: So sánh kết quả
+## Results Summary
 
 | Metric | Default Scheduler | YuniKorn Binpacking |
 |--------|-------------------|---------------------|
-| Pods on Node 1 | 2-3 | **7 (tất cả)** |
+| Pods on Node 1 | 2-3 | **7 (all)** |
 | Pods on Node 2 | 2-3 | 0 |
 | Pods on Node 3 | 1-2 | 0 |
-| CPU% Node 1 | ~29% | **~80%** |
-| Nodes cần trả tiền | **3** | **1** |
-| Cost savings | baseline | **~66% node cost** |
+| CPU utilization (max node) | ~29% | **~80%** |
+| Nodes required | **3** | **1** |
+| Potential cost savings | baseline | **~66%** |
 
 ---
 
-## Bước 4: Verify Gang Scheduling
+## How It Works
 
-Gang scheduling đảm bảo job chỉ start khi đủ resource cho TẤT CẢ pods:
+### Bin-packing (nodesortpolicy)
 
-```bash
-# Xem events — YuniKorn sẽ show "queued and waiting for allocation"
-kubectl describe pod spark-pi-yunikorn-demo-driver -n spark-apps | findstr yunikorn
-
-# Xem YuniKorn app status
-kubectl port-forward svc/yunikorn-service 9889:9889 -n yunikorn
-# Open: http://localhost:9889 → Tab "Applications"
+```yaml
+# yunikorn/values.yaml → yunikornDefaults → queues.yaml
+nodesortpolicy:
+  type: binpacking
+  resourceweights:
+    memory: 1
+    vcore: 1
 ```
 
-Không có gang scheduling → driver start trước, executors từng pod một → dễ deadlock khi thiếu resource.
+YuniKorn scores nodes by how full they already are (MostAllocated). Higher
+utilization = higher score = pods land there first. Result: existing nodes fill
+up before new nodes are provisioned.
+
+### Gang Scheduling (task-groups)
+
+```yaml
+# SparkApplication annotations
+yunikorn.apache.org/task-groups: |
+  [{"name":"spark-driver","minMember":1,"minResource":{"cpu":"1","memory":"1Gi"}},
+   {"name":"spark-executor","minMember":6,"minResource":{"cpu":"1500m","memory":"1Gi"}}]
+yunikorn.apache.org/schedulingPolicyParameters: "gangSchedulingStyle=Hard"
+```
+
+YuniKorn reserves resources for the entire application (driver + all executors)
+before starting any pod. This prevents:
+- Deadlock: two jobs each get half their executors, neither can finish
+- Partial scheduling: driver starts but executors can't be placed
+
+### Namespace Bypass (A/B isolation)
+
+```yaml
+# yunikornDefaults
+admissionController.filtering.bypassNamespaces: "^kube-system$,^spark-apps-default$"
+```
+
+Pods in `spark-apps-default` are NOT mutated by YuniKorn admission controller →
+they use the default kube-scheduler. Pods in `spark-apps` go through YuniKorn.
 
 ---
 
@@ -158,20 +239,18 @@ kubectl port-forward svc/yunikorn-service 9889:9889 -n yunikorn
 # Open: http://localhost:9889
 ```
 
-Tabs quan trọng:
-- **Queues**: Resource usage per queue (spark-batch, spark-streaming)
-- **Applications**: Spark app state (running/pending/completed)
-- **Nodes**: Pod distribution per node (visual proof of bin-packing)
+Key tabs:
+- **Queues**: Resource usage per queue (spark-batch, spark-streaming, default)
+- **Applications**: Spark app state (running, pending, completed)
+- **Nodes**: Pod distribution per node — visual proof of bin-packing
 
 ---
 
-## Áp dụng lên EKS Production
+## Production Deployment on EKS
 
-### Kết hợp với Karpenter
+### Integration with Karpenter
 
 ```yaml
-# Karpenter NodePool — không cần thay đổi đặc biệt
-# YuniKorn handle scheduling, Karpenter handle provisioning
 apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
@@ -194,26 +273,25 @@ spec:
           operator: In
           values: ["m5.2xlarge", "m5.4xlarge"]
   disruption:
-    # Karpenter consolidation: chỉ remove nodes THỰC SỰ trống
-    # YuniKorn bin-packing đảm bảo nodes trống rõ ràng (không fragmented)
+    # WhenEmpty works perfectly with bin-packing:
+    # nodes are either fully packed or completely empty
     consolidationPolicy: WhenEmpty
     consolidateAfter: 60s
 ```
 
-### Hiệu quả thực tế
+Why bin-packing + Karpenter works better than default scheduler + Karpenter:
 
-Bin-packing + gang scheduling giúp Karpenter hiệu quả hơn:
-1. **Pod không bị scatter** → nodes trống rõ ràng → consolidation nhanh
-2. **Không cần aggressive eviction** → giảm pod disruption 50%
-3. **Job hoàn thành → toàn bộ node freed** → scale-in ngay lập tức
+1. **Clean node boundaries**: Pods packed tightly → empty nodes are truly empty → instant scale-in
+2. **No aggressive eviction needed**: Reduces pod disruption by ~50%
+3. **Job completion = full node freed**: All executors on same node finish together
 
-### Production values.yaml changes
+### Production values.yaml
 
 ```yaml
 yunikorn:
   resources:
     limits:
-      cpu: "4"        # EKS dùng cgroup v2, không bị lỗi quota
+      cpu: "4"          # EKS uses cgroup v2, no quota errors
       memory: 2Gi
   yunikornDefaults:
     queues.yaml: |
@@ -244,39 +322,42 @@ yunikorn:
 
 ---
 
+## Cleanup
+
+```bash
+# Delete test jobs
+kubectl delete sparkapplication --all -n spark-apps --ignore-not-found
+kubectl delete sparkapplication --all -n spark-apps-default --ignore-not-found
+```
+
+---
+
 ## Troubleshooting
 
 ```bash
 # YuniKorn scheduler logs
 kubectl logs -l app=yunikorn -n yunikorn --tail=100
 
-# Check scheduler assignment
+# Check which scheduler is assigned to pods
 kubectl get pods -n spark-apps -o jsonpath="{range .items[*]}{.metadata.name}{'\t'}{.spec.schedulerName}{'\n'}{end}"
 
-# Verify ConfigMap loaded (phải có DATA > 0)
-kubectl get configmap yunikorn-defaults -n yunikorn
+# Verify ConfigMap loaded
+kubectl get configmap yunikorn-defaults -n yunikorn -o yaml
 
 # Gang scheduling stuck (waiting for resources)
 kubectl get events -n spark-apps --sort-by='.lastTimestamp'
 
-# Queue API
+# Queue status via REST API
 kubectl port-forward svc/yunikorn-service 9889:9889 -n yunikorn
 curl http://localhost:9889/ws/v1/queues
 ```
 
 ---
 
-## Kết luận
+## References
 
-| Vấn đề | Giải pháp | Bằng chứng |
-|---------|-----------|-------------|
-| Pod scatter → nhiều nodes bị claim | YuniKorn binpacking | 7 pods on 1 node vs 3 nodes |
-| Deadlock khi nhiều Spark jobs cùng chạy | Gang scheduling | Job only starts when ALL resources available |
-| Karpenter evict pod → Spark fail | Proactive packing = clean empty nodes | consolidationPolicy: WhenEmpty works |
-| Chi phí EKS tăng | Giảm 2/3 node cho cùng workload | POC: 1 node thay vì 3 |
-
-References:
-- [AWS Data on EKS: Binpacking](https://awslabs.github.io/data-on-eks/docs/resources/binpacking-custom-scheduler-eks)
-- [Salesforce: 13% cost savings with bin-packing](https://engineering.salesforce.com/how-data-360-optimized-kubernetes-scheduling-architecture-that-delivered-13-cost-savings/)
+- [AWS Data on EKS: Bin-packing with custom scheduler](https://awslabs.github.io/data-on-eks/docs/resources/binpacking-custom-scheduler-eks)
+- [Salesforce: 13% cost savings with bin-packing (4M Spark jobs/day)](https://engineering.salesforce.com/how-data-360-optimized-kubernetes-scheduling-architecture-that-delivered-13-cost-savings/)
 - [AWS: YuniKorn for EMR on EKS](https://docs.aws.amazon.com/emr/latest/EMR-on-EKS-DevelopmentGuide/tutorial-yunikorn.html)
-- [YuniKorn Docs](https://yunikorn.apache.org/docs/)
+- [Kubeflow Spark Operator: YuniKorn integration](https://www.kubeflow.org/docs/components/spark-operator/user-guide/yunikorn-integration/)
+- [Apache YuniKorn documentation](https://yunikorn.apache.org/docs/)
